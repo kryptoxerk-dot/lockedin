@@ -157,6 +157,37 @@ h1 { margin: 0 0 26px; font-size: clamp(112px, 15.5vw, 236px); line-height: .8; 
 }
 .hero-desc { margin: 0; max-width: 470px; color: var(--sage); font-size: 17px; }
 .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
+.hero-note {
+  display: grid;
+  gap: 4px;
+  max-width: 470px;
+  margin: 20px 0 0;
+  padding: 12px 14px 12px 34px;
+  position: relative;
+  border: 1px solid var(--lock-dim);
+  border-radius: 10px;
+  background: linear-gradient(rgba(74, 222, 128, .08), rgba(74, 222, 128, .08)), rgba(4, 6, 9, .82);
+  backdrop-filter: blur(6px);
+}
+.hero-note[hidden] { display: none; }
+.hero-note::before {
+  content: "";
+  position: absolute;
+  left: 14px;
+  top: 19px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--lock);
+  box-shadow: 0 0 8px rgba(74, 222, 128, .8);
+  animation: note-pulse 2.4s ease-in-out infinite;
+}
+.hero-note-head { color: var(--mint); font-weight: 600; font-size: 15px; line-height: 1.4; }
+.hero-note-sub { color: var(--sage); font: 500 11px/1.5 var(--mono); letter-spacing: .02em; }
+.hero-note-sub a { color: var(--lock); text-decoration: underline; text-underline-offset: 3px; }
+.hero-note-sub a:focus-visible { outline: 2px solid var(--lock); outline-offset: 2px; }
+@keyframes note-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .hero-note::before { animation: none; } }
 
 .button {
   display: inline-flex;
