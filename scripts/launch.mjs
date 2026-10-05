@@ -198,10 +198,30 @@ head(1, "preflight");
 
 // ------------------------------------------------------------------ 2
 head(2, "the mint keypair, and the vault it implies");
-let mintKeypair;
+// --adopt <mint>: the coin was created elsewhere (a launch desk that puts the team's buys in
+// its own bundle). Accepted only if the chain shows exactly the split this script would have set:
+// 50/50 between this coin's vault and this creator, frozen. Then registration and the lookup table
+// continue as usual.
+const adoptArg = process.argv.indexOf("--adopt");
+const ADOPT = adoptArg >= 0 ? process.argv[adoptArg + 1] : null;
+let mintKeypair = null;
+let mint;
 if (step("mint")) {
-  mintKeypair = Keypair.fromSecretKey(Uint8Array.from(step("mint").secretKey));
-  say(`reusing the mint from ${STATE_FILE}`);
+  mint = new PublicKey(step("mint").address);
+  if (step("mint").secretKey) mintKeypair = Keypair.fromSecretKey(Uint8Array.from(step("mint").secretKey));
+  if (ADOPT && ADOPT !== mint.toBase58()) throw new Error(`this launch state already holds coin ${mint.toBase58()}, not ${ADOPT}`);
+  say(`reusing the mint from ${STATE_FILE}${step("mint").adopted ? " (adopted)" : ""}`);
+} else if (ADOPT) {
+  const m = new PublicKey(ADOPT);
+  if (!(await connection.getAccountInfo(m))) throw new Error(`--adopt: coin ${m.toBase58()} does not exist on this cluster yet`);
+  const fees = await feeState(connection, m, deployer.publicKey, { check: false });
+  if (!correctFrozenSplit(fees, vaultPda(m), deployer.publicKey)) {
+    throw new Error(`--adopt: ${m.toBase58()} does not carry the frozen 50/50 split between its Locked In vault and ${deployer.publicKey.toBase58()}; refusing it`);
+  }
+  done("mint", { address: m.toBase58(), adopted: true });
+  done("create", { mint: m.toBase58(), adopted: true });
+  mint = m;
+  say(`adopted ${m.toBase58()}: created elsewhere, frozen 50/50 split verified on chain`);
 } else {
   mintKeypair = Keypair.generate();
   done("mint", {
@@ -209,8 +229,8 @@ if (step("mint")) {
     secretKey: Array.from(mintKeypair.secretKey),
   });
   say("generated a new mint keypair");
+  mint = mintKeypair.publicKey;
 }
-const mint = mintKeypair.publicKey;
 const vault = vaultPda(mint);
 say(`mint      ${mint.toBase58()}`);
 say(`vault     ${vault.toBase58()}   <- half the creator fees arrive here`);
@@ -219,6 +239,7 @@ say(`counter   ${counterPda(mint).toBase58()}`);
 // ------------------------------------------------------------------ 3
 head(3, "metadata");
 let uri = step("metadata")?.uri ?? METADATA_URI;
+if (!uri && step("mint")?.adopted) uri = "(set by the launch desk that created the coin)";
 if (!uri) {
   console.error(
     "\n  No metadata URI. Run scripts/upload-metadata.mjs first (it records the\n" +
