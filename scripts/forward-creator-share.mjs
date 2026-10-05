@@ -11,9 +11,10 @@
  * kept in the open. Everything it does is read back from the chain, not from
  * its own memory:
  *
- *   owed       the vault's gain in every DistributeCreatorFees transaction
- *              since FORWARD_SINCE. The split is 5,000 bps each, so the vault's
- *              half is the creator's half.
+ *   owed       the creator's half of every DistributeCreatorFees transaction
+ *              since FORWARD_SINCE: the smaller of what the vault and the creator
+ *              each received in it (5,000 bps each, so equal), so nothing but
+ *              fees is ever owed. See lib/forwarding.mjs.
  *   forwarded  every plain SOL transfer from the creator to the vault since then.
  *
  * It sends owed - forwarded and nothing else, to the vault and nowhere else.
@@ -31,6 +32,7 @@ import path from "node:path";
 
 import { priorityFee, sendAndConfirm, vaultPda } from "./lib/cycle.mjs";
 import { feeState } from "./lib/fees.mjs";
+import { classifyTransaction, transferAmount } from "./lib/forwarding.mjs";
 import { rpcLabel, rpcErrorMessage } from "./lib/rpc-log.mjs";
 
 const RPC = process.env.RPC_URL ?? "https://api.devnet.solana.com";
@@ -43,6 +45,8 @@ const STATUS = process.env.FORWARD_STATUS_PATH ?? "data/forwarder-status.json";
 const MIN_LAMPORTS = BigInt(process.env.FORWARD_MIN_LAMPORTS ?? 5_000_000);
 // Left in the creator wallet so it can always pay for its own transactions.
 const RESERVE_LAMPORTS = BigInt(process.env.CREATOR_RESERVE_LAMPORTS ?? 10_000_000);
+// A ceiling on any single transfer. Larger amounts owed go over several ticks.
+const MAX_LAMPORTS = BigInt(process.env.FORWARD_MAX_LAMPORTS ?? 1_000_000_000);
 const once = process.argv.includes("--once");
 const execute = process.argv.includes("--execute") || process.env.FORWARD_EXECUTE === "1";
 
@@ -110,26 +114,12 @@ async function newSignatures(cursor) {
   return out.reverse();
 }
 
-/** What one vault transaction means for the ledger. */
+const limits = { min: MIN_LAMPORTS, reserve: RESERVE_LAMPORTS, max: MAX_LAMPORTS };
+
 async function classify(signature) {
   const tx = await connection.getParsedTransaction(signature, { maxSupportedTransactionVersion: 1, commitment: "confirmed" });
   if (!tx) return null; // not served yet: stop here and retry from this point next tick
-  if (tx.meta?.err) return { owed: 0n, forwarded: 0n };
-  const keys = tx.transaction.message.accountKeys.map((k) => (k.pubkey ?? k).toBase58());
-  const v = keys.indexOf(vault.toBase58());
-  let owed = 0n;
-  if (v >= 0 && (tx.meta.logMessages ?? []).some((l) => l.includes("Instruction: DistributeCreatorFees"))) {
-    const gain = BigInt(tx.meta.postBalances[v]) - BigInt(tx.meta.preBalances[v]);
-    if (gain > 0n) owed = gain;
-  }
-  let forwarded = 0n;
-  for (const ix of tx.transaction.message.instructions) {
-    const p = ix.parsed;
-    if (ix.program === "system" && p?.type === "transfer" && p.info.source === creator.toBase58() && p.info.destination === vault.toBase58()) {
-      forwarded += BigInt(p.info.lamports);
-    }
-  }
-  return { owed, forwarded };
+  return classifyTransaction(tx, vault.toBase58(), creator.toBase58());
 }
 
 async function scan(state) {
@@ -178,8 +168,8 @@ async function tick(state) {
   if (Date.now() < pendingUntil) return receipt({ kind: "forward-pending", ...status });
 
   const balance = BigInt(await connection.getBalance(creator));
-  const amount = due < balance - RESERVE_LAMPORTS ? due : balance - RESERVE_LAMPORTS;
-  if (amount < MIN_LAMPORTS) {
+  const amount = transferAmount(due, balance, limits);
+  if (amount === 0n) {
     return receipt({ kind: "forward-waiting", ...status, creatorLamports: String(balance), reason: "creator wallet balance is below what is owed plus its reserve" });
   }
   if (!execute) return receipt({ kind: "would-forward", ...status, lamports: String(amount) });
