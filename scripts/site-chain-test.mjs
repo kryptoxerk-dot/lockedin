@@ -45,7 +45,11 @@ await withServer(8791,'localnet',async base=>{
     assert(account.owner.equals(new PublicKey(holder.address))&&!account.delegate&&!account.closeAuthority);
   }
   ok(true,'Mint and holder accounts have no mint, freeze, permanent-delegate, delegate or close authority that could bypass the lock');
-  ok(list.holders[0].signature!=='wrong-mint-transaction'&&state.keeper.lastKind==='locked','Receipts for another mint cannot replace this token’s transaction or activity');
+  // The file ends with another mint's "locked" line. The dashboard must report
+  // this mint's own latest receipt, whatever kind that is -- with a capped
+  // budget the keeper can tick again after its last lock and log "waiting".
+  const own=fs.readFileSync(receipts,'utf8').trim().split('\n').map(l=>JSON.parse(l)).filter(r=>r.mint===proof.mint).at(-1);
+  ok(list.holders[0].signature!=='wrong-mint-transaction'&&state.keeper.lastKind===own.kind&&state.keeper.lastAt===own.at,'Receipts for another mint cannot replace this token’s transaction or activity');
 });
 await withServer(8793,'mainnet-beta',async base=>{
   const state=await(await fetch(base+'/api/state')).json();

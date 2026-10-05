@@ -1,6 +1,6 @@
 {
-  "at": "2026-10-05T03:12:02.725Z",
-  "passed": 33,
+  "at": "2026-10-05T09:27:01.378Z",
+  "passed": 34,
   "checks": [
     "Mint and freeze authorities are revoked",
     "Frozen 50/50 split exists before graduation",
@@ -30,15 +30,16 @@
     "pumpswap: new address is keyless and actually funded",
     "pumpswap: counter equals the new holder balance",
     "pumpswap: purchased tokens all left the buyback vault",
+    "pumpswap: a repeat cycle costs the keeper only transaction fees (40300 lamports)",
     "Running keeper reacts to new trading activity without a manual trigger",
     "Unattended execution increases the on-chain holder count",
     "Every unattended cycle created a funded keyless holder",
     "Cycle closes the vault wrapped-SOL account and recovers its rent",
     "Every holder balance sums to the on-chain total"
   ],
-  "mint": "FGMMaaXYYFnavQziLnLGqtMq5G3BgeUCkEr4SfQ58Lwp",
+  "mint": "H9hfv8ZK1Gg4oscGNtX357bTxuoouJthPvvcAXbE5fyS",
   "program": "EMs5GHLJ1MMGrvVxVQKLjpSXpmkeNfc2gXjvAVEhBr2J",
   "rpc": "http://127.0.0.1:8899",
-  "totalHolders": 3,
-  "totalLocked": "670132369184"
+  "totalHolders": 4,
+  "totalLocked": "731108846746"
 }

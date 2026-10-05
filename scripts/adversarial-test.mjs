@@ -359,7 +359,7 @@ await expectRefusal(
   await cycleIx(A),
   "UnderSpent",
 );
-note("a cycle must spend at least half its budget on the buy");
+note("a cycle must spend at least 65% of its budget on the buy");
 
 // ------------------------------------------------------------------ 6
 console.log("\n6. while paused\n" + "-".repeat(72));
@@ -545,7 +545,7 @@ console.log("\n10. sandwiching a cycle\n" + "-".repeat(72));
   const feeConfig = await online.fetchFeeConfig();
   const supply = new BN((await connection.getTokenSupply(C.mint)).value.amount);
   const push = new BN(20_000_000_000); // 20 SOL to move the price
-  const buyState = await online.fetchBuyState(C.mint, attacker.publicKey);
+  const buyState = await online.fetchBuyState(C.mint, attacker.publicKey, C.tokenProgram);
   const pushTokens = pump.getBuyTokenAmountFromSolAmount({
     global, feeConfig, mintSupply: supply, bondingCurve: buyState.bondingCurve, amount: push, quoteMint: WSOL,
   });
@@ -570,7 +570,7 @@ console.log("\n10. sandwiching a cycle\n" + "-".repeat(72));
 
   const attackerAta = ataFor(attacker.publicKey, C.tokenProgram, C.mint);
   const held = new BN((await tokenBalance(connection, attackerAta)).toString());
-  const sellState = await online.fetchSellState(C.mint, attacker.publicKey);
+  const sellState = await online.fetchSellState(C.mint, attacker.publicKey, C.tokenProgram);
   const out = pump.getSellSolAmountFromTokenAmount({
     global, feeConfig, mintSupply: supply, bondingCurve: sellState.bondingCurve, amount: held,
   });

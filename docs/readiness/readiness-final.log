@@ -7,13 +7,13 @@ LOCKED IN -- one full cycle
         program EMs5GHLJ1MMGrvVxVQKLjpSXpmkeNfc2gXjvAVEhBr2J
   PASS  a funded stranger cannot create the config — refused with NotUpgradeAuthority
         config created by the upgrade authority
-        mint 8w7RRpRKNzcxsq5L88jPshsZ5YytWwQxViuZXA8FVmbu
+        mint EDNhqRw4xLCp2ZBVEnTDgt4gYGbgmjnuY9jdc4yVyzA3
   PASS  registered: counter starts at zero
         vault funded with 0.06 SOL
 
 1. a cycle locks the purchase into holder 0
 ------------------------------------------------------------------------
-        tx 4V8YuASTCbjWgsaFufH9pvypxerh…
+        tx 33LgNPyax1wvWBzpDbi2ET8Hxag5…
   PASS  1850818365110 tokens now sit in holder 0
   PASS  the vault's token account is empty
   PASS  counter advanced by exactly one
@@ -21,13 +21,12 @@ LOCKED IN -- one full cycle
 
 2. the holder provably has no private key
 ------------------------------------------------------------------------
-  PASS  9s8fwXcZnJey52PaixjrEeVv5pVpEofr6kmKdutCJwG6 is off the ed25519 curve
+  PASS  CKoY6onsMSAdNwqT1uKWoxiZbKLTQJCz8DGfKzXqRGvm is off the ed25519 curve
         no private key exists for it, and none can be derived
 
 3. a caller cannot choose a different holder
 ------------------------------------------------------------------------
-        Simulation failed. 
-  PASS  refused (reason above)
+  PASS  refused: the holder must be the counter's current index
 
 4. a second cycle uses a new address, not the old one
 ------------------------------------------------------------------------
@@ -42,14 +41,14 @@ LOCKED IN -- one full cycle
 
 ========================================================================
   12 passed, 0 failed
-  mint 8w7RRpRKNzcxsq5L88jPshsZ5YytWwQxViuZXA8FVmbu
+  mint EDNhqRw4xLCp2ZBVEnTDgt4gYGbgmjnuY9jdc4yVyzA3
 ========================================================================
 == adversarial suite ==
 ========================================================================
 LOCKED IN -- what a caller cannot do
 ========================================================================
-        token A EKCnMzDds7jmENnTr1m1sSDMLq5oDUYPTxvdBrFdS1z2
-        token B 6Hmg3sSoNMGdrY2HkSe4VbYMcfYqA1EyvwTGhFTUueaT
+        token A 8j16wCw7Qyes7xEnL8rn9oDc2fMqWzMcbcwvCyCgHPoM
+        token B BhMnSj3r5W4KCMU3jbeU8vLZgW9CzN2rK2fL93TRJCfY
 
 1. an empty vault
 ------------------------------------------------------------------------
@@ -78,7 +77,7 @@ LOCKED IN -- what a caller cannot do
 5b. buying dust to drain the vault
 ------------------------------------------------------------------------
   PASS  a one-token buy against a funded vault — refused with UnderSpent
-        a cycle must spend at least half its budget on the buy
+        a cycle must spend at least 65% of its budget on the buy
 
 6. while paused
 ------------------------------------------------------------------------
@@ -92,7 +91,7 @@ LOCKED IN -- what a caller cannot do
 
 8. a locked balance, once it exists
 ------------------------------------------------------------------------
-  PASS  2035394117777 tokens are in the holder's account
+  PASS  1944287780068 tokens are in the holder's account
   PASS  its authority is the holder PDA and nothing else
   PASS  a transfer out cannot even be signed for
 
@@ -104,8 +103,17 @@ LOCKED IN -- what a caller cannot do
   PASS  the former admin pausing after renouncing — refused with NotAdmin
         anyone can check this: read the config account's admin field
 
+10. sandwiching a cycle
+------------------------------------------------------------------------
+        curve SOL reserve 30027985075; one cycle may spend at most 60055970 lamports
+  PASS  a cycle priced at the whole vault is refused: pump only accepts the capped budget
+        the vault's cycle cost 100688654 lamports, rent and fee included; the cap is 99562142
+  PASS  the cycle spent no more than its capped budget, rent and fee
+  PASS  everything above the cap stayed in the vault for the next cycle
+  PASS  the sandwich lost the attacker 0.434496 SOL
+
 ========================================================================
-  19 passed, 0 failed
+  23 passed, 0 failed
 ========================================================================
 == independent PumpSwap suite ==
 ========================================================================
@@ -126,31 +134,29 @@ LOCKED IN -- a cycle on PumpSwap
 3. it does not fit without a lookup table, and does with one
 ------------------------------------------------------------------------
         a legacy transaction would be 1246 bytes, over the 1232 limit
-        table 2isuNc3bM5TQysh9gg3dLzGyxpmxN7JpSSfnjDCj1Qjo was recorded but is not on this cluster; making a new one
-        table AY2fXHCAisRQnjzwgpVPCGPnTHYM2rQbsjE4194dTzWk created
+        table G4mgaXHwQpaF3XQbXocL1m4jvBL7nRBnvV1LbnmqdDxH was recorded but is not on this cluster; making a new one
+        table G4mgaXHwQpaF3XQbXocL1m4jvBL7nRBnvV1LbnmqdDxH created
         extended with 20
         extended with 8
-  PASS  lookup table AY2fXHCAisRQnjzwgpVPCGPnTHYM2rQbsjE4194dTzWk holds 28 accounts
+  PASS  lookup table G4mgaXHwQpaF3XQbXocL1m4jvBL7nRBnvV1LbnmqdDxH holds 28 accounts
   PASS  the table is warm and loadable the way the keeper loads it
 
 4. the accounts PumpSwap will not create for us
 ------------------------------------------------------------------------
-        created 9 account(s) in 5U3v2GpCqJvFFiwY…
-        created 1 account(s) in 32ccoY15TLDaS2yB…
-        created 1 account(s) in 5paUB9NXzziciR5s…
-  PASS  a sendable cycle after 3 round(s) of preparation
+        created 8 account(s) in 5UB5obcQSzkwTddT…
+  PASS  a sendable cycle after 1 round(s) of preparation
 
 5. the cycle
 ------------------------------------------------------------------------
-  PASS  the cycle is 476 bytes, 756 under the limit
+  PASS  the cycle is 538 bytes, 694 under the limit
   PASS  a one-percent buy on PumpSwap is refused with UnderSpent
-        tx 4XCeVFr4NUQJfbLkYHdqWMrznbfx…
-  PASS  2650575979368 tokens locked into holder 0 on PumpSwap
+        tx U954VJ9vRg1ZUEx2A2PcqH3beWdu…
+  PASS  700795684874 tokens locked into holder 0 on PumpSwap
   PASS  the vault's token account is empty
   PASS  the counter advanced by one
   PASS  the wrapped-SOL account was closed back into the vault
   PASS  the holder has no private key
-        vault 80890880 -> 11055615 lamports
+        vault 80890880 -> 60368138 lamports
 
 ========================================================================
   13 passed, 0 failed
@@ -161,7 +167,7 @@ Authority: none
 
 == automatic fee flow through actual graduation ==
 == atomic launch and pre-graduation fee routing ==
-  created, fee shares frozen, dev buy complete: 2qEm1X9Q6o1vrefSMyWjUoQZumdB469kZZzAtbtEqsWGmKtdeKqwnQXmbJfMKVXJhFfcQ8LkEgfeQXL2NicBaaJg
+  created, fee shares frozen, dev buy complete: 96phmcsCepPvEvXgQvEWwsgufM2KbJU2c3oxCCHrTWDTACxZwQM7ZX9B5gLpWXzwV5i3bJog4BhPsgUbDcXPNym
   verified: frozen 50/50 split already configured
   the program config already exists
   PASS  Mint and freeze authorities are revoked
@@ -174,10 +180,10 @@ Authority: none
   PASS  Launch refuses a different creator wallet on resume
   PASS  Launch refuses a different network on resume
   PASS  Real bonding-curve trades produced distributable creator fees
-{"at":"2026-10-05T03:10:04.735Z","kind":"start","rpc":"127.0.0.1:8899","mint":"FGMMaaXYYFnavQziLnLGqtMq5G3BgeUCkEr4SfQ58Lwp","vault":"DZ3nVGYJTokZoHdwoLiaGWY7Qrpw2SuNLLci2DqWHiu7","keeper":"GNzrQXWN4uMgM6bzkKt4d5YWM3LLKgVnThzrpe9WmitN","mode":"executing","intervalMs":60000,"minCycle":20000000}
-{"at":"2026-10-05T03:10:05.424Z","kind":"fees-distributed","mint":"FGMMaaXYYFnavQziLnLGqtMq5G3BgeUCkEr4SfQ58Lwp","lamports":"110189704","graduated":false,"shareholders":2,"signature":"3mzpVxgi7ogRJqtReuVirT8uZ2SoV9z75kmY6DGFaqbkiJf8TbPXSW3kHtCzHwMgmKPkEdTP11C6JsP5myLBkUzM"}
-{"at":"2026-10-05T03:10:05.952Z","kind":"prepared","mint":"FGMMaaXYYFnavQziLnLGqtMq5G3BgeUCkEr4SfQ58Lwp","accounts":2,"signature":"4QpZFWQ2dJytfJ7JSu8QjR3ouRJFnYxhBqu6g4dtoiDBSnyfD99ZF5pGB8497g2jvNRwXJCgyq66cvXsaUVaLjZT"}
-{"at":"2026-10-05T03:10:10.724Z","kind":"locked","mint":"FGMMaaXYYFnavQziLnLGqtMq5G3BgeUCkEr4SfQ58Lwp","index":0,"holder":"4pWQ9PSr1irY8KrYWa9jybifRB68jfdWrgSDwfJA5xk8","signature":"MgWVa8EcxMN2box9uGnQxEmmEPSZVTPpvd24NVTsFS76n2VvqXpZwFvrJSK3Smywn7PjHtZjk6SvLDBxsbNfsiv","tokens":"374124468782","spent":52970772,"margin":99,"market":"bonding-curve","bytes":433}
+{"at":"2026-10-05T09:24:25.179Z","kind":"start","rpc":"127.0.0.1:8899","mint":"H9hfv8ZK1Gg4oscGNtX357bTxuoouJthPvvcAXbE5fyS","vault":"B1yCRHuyS91WAWpkkMQcjJrb3DZzM8RiaMseBbgHfzZS","keeper":"6fN2HP6FETpEtmHe19f4BnmLJtdk18Scciy5YKGajUaW","mode":"executing","intervalMs":60000,"minCycle":20000000}
+{"at":"2026-10-05T09:24:25.863Z","kind":"fees-distributed","mint":"H9hfv8ZK1Gg4oscGNtX357bTxuoouJthPvvcAXbE5fyS","lamports":"110189704","graduated":false,"shareholders":2,"signature":"4omVUZx3s13Gia8gSt54hpDJcpa14jvfhMy2YEzmi3SZ4HBhuZV9nQLceicLm21F1GMaaxuzugRAk3DuDWzmEhWg"}
+{"at":"2026-10-05T09:24:26.384Z","kind":"prepared","mint":"H9hfv8ZK1Gg4oscGNtX357bTxuoouJthPvvcAXbE5fyS","accounts":2,"signature":"g7rCHL8nYsM4ZHuUj7HW5KSG3HD4EYQHvowN3STSwrvVDkKyJWqqM5fcSuQhZLEvoBKkyMvLNVFumLyntD8Pd2e"}
+{"at":"2026-10-05T09:24:33.188Z","kind":"locked","mint":"H9hfv8ZK1Gg4oscGNtX357bTxuoouJthPvvcAXbE5fyS","index":0,"holder":"H2QCe6UtjtG6HiwDakxihQD1METys7b1uakJaRtyveLV","signature":"4L8Svx2R9v4bwESubLW7ctZjrLVAD3SCr8xkrU3w9LBK57ymv5iZXmCeBS9KRgykc3uSTyjkdA72euofMzLxp1r8","tokens":"374124468782","spent":52970772,"margin":99,"market":"bonding-curve","bytes":433}
   PASS  bonding-curve: keeper distributes creator fees without the creator signing
   PASS  bonding-curve: vault received exactly half the distributable fees
   PASS  bonding-curve: keeper bought and recorded a verified lock
@@ -187,14 +193,15 @@ Authority: none
   PASS  bonding-curve: purchased tokens all left the buyback vault
 == graduate the same token and migrate its liquidity ==
   PASS  Real buying completed the bonding curve
-  migration 3EresvJ1pAYq1eGpacGghi31dSoPS7HBFcn9DTedY76gPoCXvcYo1V8R5AXPr1uigzwn2XSgQUi844Q7cyshqcBW
+  migration 4GQxdxz89tvkJGNRtTGc4SpRDaUMCHNDeGWP3aJNKKUiogh3vx2XkvdUQmo3ATvrQHro1VZJyRogBwWJHdGbx3tW
   PASS  Pump created a real canonical PumpSwap pool
   PASS  Graduation preserved the frozen creator-fee routing
   PASS  Real PumpSwap trades produced distributable creator fees
-{"at":"2026-10-05T03:11:30.601Z","kind":"start","rpc":"127.0.0.1:8899","mint":"FGMMaaXYYFnavQziLnLGqtMq5G3BgeUCkEr4SfQ58Lwp","vault":"DZ3nVGYJTokZoHdwoLiaGWY7Qrpw2SuNLLci2DqWHiu7","keeper":"GNzrQXWN4uMgM6bzkKt4d5YWM3LLKgVnThzrpe9WmitN","mode":"executing","intervalMs":60000,"minCycle":20000000}
-{"at":"2026-10-05T03:11:31.289Z","kind":"fees-distributed","mint":"FGMMaaXYYFnavQziLnLGqtMq5G3BgeUCkEr4SfQ58Lwp","lamports":"456076560","graduated":true,"shareholders":2,"signature":"4R99aCAjAfdngVgNrwGCTVyVsjSHL1fQtN9sujNRtBMhipHaAv6RpktNysbPQ8duQ3Nnwa2Tnmh8fay5Cm8Pr95U"}
-{"at":"2026-10-05T03:11:31.903Z","kind":"prepared","mint":"FGMMaaXYYFnavQziLnLGqtMq5G3BgeUCkEr4SfQ58Lwp","accounts":2,"signature":"648u4mSxeBi3HBkDChKfnGZFc9cs4RYPDGEhBeCaKn3fdEt8tjXTvYy8cEDgXiDGNL4PpGoB5Ni2k4Nfy5Ln2637"}
-{"at":"2026-10-05T03:11:32.123Z","kind":"locked","mint":"FGMMaaXYYFnavQziLnLGqtMq5G3BgeUCkEr4SfQ58Lwp","index":1,"holder":"2yp9LcrW4P4LYnDxLREytQPg4CMa1Zifoxz7Tqd9vWnB","signature":"5sqLFsj8ATxZehqtNKEWnK6JF5Bd1SZm2NbDhYSh91LbAhqesMfteqEwTJedQ7ZCcmub8Awh9pr98jBdAy2cjK3o","tokens":"248448217446","spent":224405040,"margin":99,"market":"pumpswap","bytes":786}
+{"at":"2026-10-05T09:25:49.871Z","kind":"start","rpc":"127.0.0.1:8899","mint":"H9hfv8ZK1Gg4oscGNtX357bTxuoouJthPvvcAXbE5fyS","vault":"B1yCRHuyS91WAWpkkMQcjJrb3DZzM8RiaMseBbgHfzZS","keeper":"6fN2HP6FETpEtmHe19f4BnmLJtdk18Scciy5YKGajUaW","mode":"executing","intervalMs":60000,"minCycle":20000000}
+{"at":"2026-10-05T09:25:50.519Z","kind":"fees-distributed","mint":"H9hfv8ZK1Gg4oscGNtX357bTxuoouJthPvvcAXbE5fyS","lamports":"456076560","graduated":true,"shareholders":2,"signature":"2Kg51iQEkgCAE7BDDMVnnMhnrNDTtGLTygxKFgL1KxV2byFcdWM5mRsHYaVPjERuT9auaHyPQ33WAciUJuF2u3rt"}
+{"at":"2026-10-05T09:25:51.481Z","kind":"prepared","mint":"H9hfv8ZK1Gg4oscGNtX357bTxuoouJthPvvcAXbE5fyS","accounts":1,"signature":"5hG6pxED64G882amAUv3f4Zx4iUxpSrFKycqvbUhq8zHSZUTKgGWm3M8kB1rPf78eeZHhWwQ2N3vq63ydsTgmRf3"}
+{"at":"2026-10-05T09:25:51.482Z","kind":"prepared","mint":"H9hfv8ZK1Gg4oscGNtX357bTxuoouJthPvvcAXbE5fyS","accounts":1,"signature":"5YCrUCLrPoZMf2gZPattakppr6BCje9ovdwC4aBhYK1n2BbycJ38hU6BZPyU19BdNns3Gg4TCUDNgewrkqk6JQGJ"}
+{"at":"2026-10-05T09:25:51.751Z","kind":"locked","mint":"H9hfv8ZK1Gg4oscGNtX357bTxuoouJthPvvcAXbE5fyS","index":1,"holder":"AyaqYQdSMZzXenR3BeVXPk5XzBQnzJVxzPunzUSP9DJr","signature":"2dXQoRLG9Xhexgs8j1ys81eUDyyN9pPRVE6PhhkCGDwB2FH4pUHMg9UEYv4kPamJbWfq2cDRoGjeMvUXnaKcC9Nw","tokens":"236921200110","spent":213975859,"margin":99,"market":"pumpswap","bytes":786}
   PASS  pumpswap: keeper distributes creator fees without the creator signing
   PASS  pumpswap: vault received exactly half the distributable fees
   PASS  pumpswap: keeper bought and recorded a verified lock
@@ -202,13 +209,14 @@ Authority: none
   PASS  pumpswap: new address is keyless and actually funded
   PASS  pumpswap: counter equals the new holder balance
   PASS  pumpswap: purchased tokens all left the buyback vault
+  PASS  pumpswap: a repeat cycle costs the keeper only transaction fees (40300 lamports)
 == unattended keeper follows new trading activity ==
   PASS  Running keeper reacts to new trading activity without a manual trigger
   PASS  Unattended execution increases the on-chain holder count
   PASS  Every unattended cycle created a funded keyless holder
   PASS  Cycle closes the vault wrapped-SOL account and recovers its rent
   PASS  Every holder balance sums to the on-chain total
-  33 passed, 0 failed
+  34 passed, 0 failed
 == actual dashboard chain data and network guards ==
   PASS  Dashboard figures match the real on-chain counter
   PASS  Dashboard verifies actual immutable deployment and renounced pause admin

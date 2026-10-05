@@ -1,5 +1,5 @@
 {
-  "at": "2026-10-05T03:12:05.605Z",
+  "at": "2026-10-05T09:27:04.159Z",
   "passed": 10,
   "checks": [
     "Dashboard figures match the real on-chain counter",
