@@ -4,6 +4,8 @@
  *
  *   node --env-file=.env.mainnet scripts/program-setup.mjs --status --binary program/lockedin.so --sha256 <hex>
  *   ... --deploy --init --binary program/lockedin.so --sha256 <hex> --execute
+ *   ... --verify-pda --commit <git sha> --execute
+ *   ... --submit-verification
  *   ... --renounce-admin --execute
  *   ... --finalize --binary program/lockedin.so --sha256 <hex> --execute
  *
@@ -12,13 +14,18 @@
  * 2. init     the program refuses init_config unless the upgrade authority
  *             signs it, so nobody can take the pause admin in between. Run in
  *             the same invocation as the deploy anyway.
- * 3. renounce proves the admin is ours by using it, then sets it to the zero
+ * 3. verify   writes the verified-build record (OtterSec's otter-verify PDA:
+ *             repo, commit, build args) signed by the upgrade authority -- the
+ *             only signer explorers trust, so it has to happen before step 6.
+ *             Then asks verify.osec.io to rebuild the commit and compare.
+ * 5. renounce proves the admin is ours by using it, then sets it to the zero
  *             address. Refused while paused.
- * 4. finalize removes the upgrade authority. Refused unless the deployed bytes
- *             are the tested binary, the config exists, its admin is zero and
- *             it is unpaused. After this nothing can change the program.
+ * 6. finalize removes the upgrade authority. Refused unless the deployed bytes
+ *             are the tested binary, the config exists, its admin is zero, it
+ *             is unpaused, and (on mainnet) OtterSec reports the build
+ *             verified. After this nothing can change the program.
  *
- * Steps 3 and 4 are irreversible and need the owner's explicit go. Nothing is
+ * Steps 5 and 6 are irreversible and need the owner's explicit go. Nothing is
  * sent without --execute. The RPC URL is read from RPC_URL and handed to the
  * Solana CLI through a private config file, never as a command argument.
  */
@@ -32,6 +39,7 @@ import {
   Connection,
   Keypair,
   PublicKey,
+  SystemProgram,
   Transaction,
   TransactionInstruction,
   sendAndConfirmTransaction,
@@ -69,6 +77,54 @@ const say = (m) => console.log(`  ${m}`);
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const PROGRAMDATA_HEADER = 45; // u32 tag, u64 slot, Option<Pubkey>
 
+// ------------------------------------------------------- verified build
+// Mirrors solana-verify 0.5.2 (src/solana_program.rs), which does not run on
+// Windows: the same program, seeds, discriminators and borsh layout, so the
+// record is exactly what `solana-verify verify-from-repo` would have written.
+const OTTER_VERIFY = new PublicKey("verifycLy8mB96wd9wqq3WDXQwM4oU6r42Th37Db9fC");
+const OTTER_INITIALIZE = Buffer.from([175, 175, 109, 31, 13, 152, 155, 237]);
+const OTTER_UPDATE = Buffer.from([219, 200, 88, 176, 158, 63, 253, 127]);
+const SOLANA_VERIFY_VERSION = "0.5.2";
+const REPO = option("--repo") ?? "https://github.com/kryptoxerk-dot/lockedin";
+const BUILD_ARGS = ["--library-name", "lockedin"];
+const VERIFY_API = "https://verify.osec.io";
+const otterPda = (signer) =>
+  PublicKey.findProgramAddressSync([Buffer.from("otter_verify"), signer.toBuffer(), PROGRAM.toBuffer()], OTTER_VERIFY)[0];
+const borshString = (s) => {
+  const bytes = Buffer.from(s, "utf8");
+  const len = Buffer.alloc(4);
+  len.writeUInt32LE(bytes.length);
+  return Buffer.concat([len, bytes]);
+};
+/** InputParams { version, git_url, commit, args: Vec<String>, deployed_slot: u64 } */
+function otterParams({ commit, deployedSlot }) {
+  const count = Buffer.alloc(4);
+  count.writeUInt32LE(BUILD_ARGS.length);
+  const slot = Buffer.alloc(8);
+  slot.writeBigUInt64LE(BigInt(deployedSlot));
+  return Buffer.concat([
+    borshString(SOLANA_VERIFY_VERSION),
+    borshString(REPO),
+    borshString(commit),
+    count,
+    ...BUILD_ARGS.map(borshString),
+    slot,
+  ]);
+}
+/** OtterSec's view: verified, and built from this repository. */
+async function verifiedByOtterSec() {
+  try {
+    const response = await fetch(`${VERIFY_API}/status/${PROGRAM.toBase58()}`);
+    if (!response.ok) return { verified: false, reason: `status HTTP ${response.status}` };
+    const s = await response.json();
+    const ours = typeof s.repo_url === "string" && s.repo_url.includes(new URL(REPO).pathname);
+    const verified = s.is_verified === true && s.on_chain_hash === s.executable_hash && ours;
+    return { verified, reason: verified ? `verified at commit ${s.commit}` : (s.message ?? "not verified"), status: s };
+  } catch (e) {
+    return { verified: false, reason: String(e.message ?? e) };
+  }
+}
+
 // ------------------------------------------------------------- the binary
 function loadBinary() {
   const file = option("--binary");
@@ -92,7 +148,7 @@ async function programState() {
   const data = await connection.getAccountInfo(dataAddress);
   if (!data || data.data.readUInt32LE(0) !== 3) throw new Error("ProgramData account missing or malformed");
   const authority = data.data[12] === 1 ? new PublicKey(data.data.subarray(13, 45)) : null;
-  return { deployed: true, authority, programBytes: data.data.subarray(PROGRAMDATA_HEADER) };
+  return { deployed: true, authority, slot: data.data.readBigUInt64LE(4), programBytes: data.data.subarray(PROGRAMDATA_HEADER) };
 }
 
 async function configState() {
@@ -211,8 +267,68 @@ if (flag("--init")) {
   }
 }
 
+if (flag("--verify-pda")) {
+  console.log("\n3. record the verified build");
+  const commit = option("--commit");
+  if (!/^[0-9a-f]{40}$/.test(commit ?? "")) throw new Error("--commit <full 40-character git sha of the public repo> is required");
+  const state = await programState();
+  if (!state.deployed) throw new Error("deploy the program first");
+  if (!state.authority?.equals(wallet.publicKey)) {
+    throw new Error("only the upgrade authority's record is trusted by explorers, and this wallet is not it");
+  }
+  const pda = otterPda(wallet.publicKey);
+  const existing = await connection.getAccountInfo(pda);
+  say(`repo      ${REPO}`);
+  say(`commit    ${commit}`);
+  say(`args      ${BUILD_ARGS.join(" ")}`);
+  say(`record    ${pda.toBase58()}${existing ? " (exists; updating)" : ""}`);
+  if (execute) {
+    await send([new TransactionInstruction({
+      programId: OTTER_VERIFY,
+      keys: [
+        { pubkey: pda, isSigner: false, isWritable: true },
+        { pubkey: wallet.publicKey, isSigner: true, isWritable: false },
+        { pubkey: PROGRAM, isSigner: false, isWritable: false },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ],
+      data: Buffer.concat([existing ? OTTER_UPDATE : OTTER_INITIALIZE, otterParams({ commit, deployedSlot: state.slot })]),
+    })], "verified-build record written");
+    const written = await connection.getAccountInfo(pda);
+    if (!written?.owner.equals(OTTER_VERIFY) || !written.data.includes(Buffer.from(commit))) {
+      throw new Error("the verified-build record is missing or does not name the commit");
+    }
+    say("confirmed on chain: the record names this repository and commit");
+  } else {
+    say("would write the record; re-run with --execute");
+  }
+}
+
+if (flag("--submit-verification")) {
+  console.log("\n4. ask OtterSec to rebuild and compare");
+  if (genesis !== MAINNET_GENESIS) throw new Error("OtterSec's verifier only serves mainnet");
+  if (!(await connection.getAccountInfo(otterPda(wallet.publicKey)))) throw new Error("write the verified-build record first (--verify-pda)");
+  const response = await fetch(`${VERIFY_API}/verify-with-signer`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ program_id: PROGRAM.toBase58(), signer: wallet.publicKey.toBase58(), repository: "", commit_hash: "" }),
+  });
+  const submitted = await response.json().catch(() => ({}));
+  if (!response.ok || !submitted.request_id) throw new Error(`submission refused: HTTP ${response.status} ${JSON.stringify(submitted).slice(0, 300)}`);
+  say(`job ${submitted.request_id}; logs at ${VERIFY_API}/logs/${submitted.request_id}`);
+  for (let waited = 0; waited < 45 * 60; waited += 15) {
+    await new Promise((r) => setTimeout(r, 15_000));
+    const job = await (await fetch(`${VERIFY_API}/job/${submitted.request_id}`)).json().catch(() => null);
+    if (!job || job.status === "in_progress" || job.status === "unknown") continue;
+    if (job.status === "completed" && job.executable_hash === job.on_chain_hash) {
+      say(`verified: rebuilt hash ${job.executable_hash} equals the on-chain hash`);
+      break;
+    }
+    throw new Error(`verification did not pass: ${JSON.stringify(job).slice(0, 400)}`);
+  }
+}
+
 if (flag("--renounce-admin")) {
-  console.log("\n3. renounce the pause admin  (IRREVERSIBLE)");
+  console.log("\n5. renounce the pause admin  (IRREVERSIBLE)");
   const config = await configState();
   if (!config) throw new Error("initialise the config first");
   if (config.renounced) {
@@ -236,7 +352,7 @@ if (flag("--renounce-admin")) {
 }
 
 if (flag("--finalize")) {
-  console.log("\n4. remove the upgrade authority  (IRREVERSIBLE)");
+  console.log("\n6. remove the upgrade authority  (IRREVERSIBLE)");
   const binary = loadBinary();
   const state = await programState();
   if (!state.deployed) throw new Error("deploy the program first");
@@ -249,6 +365,17 @@ if (flag("--finalize")) {
     if (!config.renounced) throw new Error("renounce the pause admin before finalising");
     if (config.paused) throw new Error("the config is paused");
     if (!state.authority.equals(wallet.publicKey)) throw new Error(`the upgrade authority is ${state.authority.toBase58()}, not this wallet`);
+    // Explorers only trust a verified-build record signed by the upgrade
+    // authority, which stops existing in the next transaction. So on mainnet
+    // the record must be written and OtterSec must agree before it goes.
+    if (genesis === MAINNET_GENESIS && !flag("--skip-verified-build")) {
+      if (!(await connection.getAccountInfo(otterPda(wallet.publicKey)))) {
+        throw new Error("write the verified-build record first (--verify-pda): after this step nobody could");
+      }
+      const otter = await verifiedByOtterSec();
+      if (!otter.verified) throw new Error(`OtterSec does not report this program verified yet (${otter.reason}); run --submit-verification`);
+      say(`OtterSec: ${otter.reason}`);
+    }
     if (execute) {
       // Loader-v3 SetAuthority with no new authority: the program is final.
       await send([new TransactionInstruction({

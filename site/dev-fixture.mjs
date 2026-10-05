@@ -124,7 +124,7 @@ http
         holdersPage(Number(url.searchParams.get("from") ?? 0), Number(url.searchParams.get("count") ?? 50)),
       );
     }
-    const file = url.pathname === "/" ? "index.html" : url.pathname.replace(/^\/+/, "");
+    const file = url.pathname === "/" ? "index.html" : url.pathname === "/docs" ? "docs.html" : url.pathname.replace(/^\/+/, "");
     const full = path.join(PUBLIC, file);
     if (!full.startsWith(PUBLIC)) return res.writeHead(403).end();
     fs.readFile(full, (err, data) => {

@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#040609">
+<title>Docs — Locked In</title>
+<meta name="description" content="How the $LOCKEDIN mechanism works, what its program cannot do, what can still go wrong, and how to verify every part of it yourself.">
+<link rel="canonical" href="https://lockedinforever.locker/docs">
+<meta property="og:title" content="Locked In — Docs">
+<meta property="og:description" content="How the mechanism works, what the program cannot do, the risks, and how to verify it yourself.">
+<meta property="og:image" content="https://lockedinforever.locker/assets/social-card.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anybody:ital,wdth,wght@0,50..150,400..900;1,50..150,400..900&family=Instrument+Sans:wdth,wght@75..100,400..700&family=Martian+Mono:wdth,wght@75..112.5,400..700&display=swap">
+<link rel="stylesheet" href="/style.css?v=5">
+</head>
+<body class="docs-page">
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav nav-solid">
+  <a class="brand" href="/" aria-label="Locked In home">
+    <img src="/assets/logo.png" alt="" width="40" height="40">
+    <span class="brand-name">Locked In</span>
+  </a>
+  <nav aria-label="Main navigation">
+    <a href="/#mechanism">How it works</a>
+    <a href="/#locks">The wall</a>
+    <a href="/docs" aria-current="page">Docs</a>
+    <a href="https://github.com/kryptoxerk-dot/lockedin" target="_blank" rel="noopener noreferrer">Source ↗</a>
+  </nav>
+</header>
+
+<main id="main" class="wrap docs">
+  <aside class="docs-toc" aria-label="On this page">
+    <p class="kicker">Docs</p>
+    <ol>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#cycle">A cycle, step by step</a></li>
+      <li><a href="#cannot">What the program cannot do</a></li>
+      <li><a href="#risks">What can still go wrong</a></li>
+      <li><a href="#verify">Verify it yourself</a></li>
+      <li><a href="#addresses">Addresses</a></li>
+    </ol>
+  </aside>
+
+  <article class="docs-body">
+    <header class="docs-head">
+      <p class="kicker">Docs</p>
+      <h1 class="docs-title">How the lock works.</h1>
+      <p class="lede">Everything here can be checked against the <a href="https://github.com/kryptoxerk-dot/lockedin" target="_blank" rel="noopener noreferrer">open-source code</a> and the chain. Where something depends on trust or could fail, it says so.</p>
+    </header>
+
+    <section id="overview">
+      <h2>Overview</h2>
+      <p>$LOCKEDIN is a pump.fun token with one mechanism. Half of every creator fee goes to a buyback vault. When the vault has enough, anyone can run a <em>cycle</em>: it buys $LOCKEDIN and moves the whole purchase to a brand-new address that has no private key. Every cycle adds one locked holder, counted on-chain.</p>
+      <p>The token launches with its fee split already set to 50% vault and 50% creator, and frozen, in the same transaction that creates it. That transaction also makes the creator's 2 SOL dev buy, so nobody can buy before it.</p>
+    </section>
+
+    <section id="cycle">
+      <h2>A cycle, step by step</h2>
+      <ol class="docs-steps">
+        <li><strong>Fees are distributed.</strong> pump.fun holds creator fees until someone calls its public distribute instruction, which pays each half to its recipient.</li>
+        <li><strong>The vault reserves what the cycle must pay for:</strong> its own rent, rent for the new holder's token account, and a fixed 0.00005 SOL to whoever submits the cycle. What is left must be at least 0.02 SOL. One cycle spends at most 0.2% of the market's SOL reserve; anything above that waits for the next cycle.</li>
+        <li><strong>The vault buys</strong> on the bonding curve, or on the PumpSwap pool after graduation. The program derives the pool itself and checks that the buyer is the vault and the token is $LOCKEDIN.</li>
+        <li><strong>At least 65% of the budget must be spent.</strong> This stops a caller from buying a single token and making the vault pay rent for an empty lock.</li>
+        <li><strong>Everything bought moves to lock <em>n</em></strong>, an address the program derives from the mint and the lock number. The caller cannot choose it.</li>
+        <li><strong>The counter goes up by one.</strong></li>
+      </ol>
+      <p>All of it happens in one instruction, so a purchase never sits anywhere it could be sold from. Our keeper submits cycles automatically every minute; if it ever stops, anyone can submit the same instruction.</p>
+    </section>
+
+    <section id="cannot">
+      <h2>What the program cannot do</h2>
+      <ul class="docs-list">
+        <li><strong>Move locked tokens.</strong> No instruction transfers, withdraws or closes anything a lock address owns. The lock seed appears in exactly one instruction: the one that creates the lock and fills it.</li>
+        <li><strong>Send vault SOL anywhere else.</strong> Vault SOL can only go to a pump.fun buy of $LOCKEDIN (including pump.fun's own fees on that buy), rent for the new lock's token account, and the fixed submitter fee.</li>
+        <li><strong>Change.</strong> Before the token is created, the program's upgrade authority is removed and its pause admin is set to an address nobody can sign for. After that, nobody (us included) can modify, pause or redeploy it.</li>
+        <li><strong>Mint or freeze tokens.</strong> pump.fun revokes the mint and freeze authorities at creation. The lock accounts have no delegate and no close authority.</li>
+      </ul>
+    </section>
+
+    <section id="risks">
+      <h2>What can still go wrong</h2>
+      <ul class="docs-list risk">
+        <li><strong>pump.fun can change its programs; ours cannot follow.</strong> The program calls pump.fun's buy instructions in today's format. If a future pump.fun upgrade changes that format incompatibly, cycles stop for good, and SOL still arriving in the vault stays there unspent. Tokens already locked stay locked either way.</li>
+        <li><strong>The creator wallet is a normal wallet.</strong> It receives the other 50% of creator fees and holds the 2 SOL dev buy. Those tokens are not locked and can be sold.</li>
+        <li><strong>Buybacks are market buys.</strong> Each cycle is capped at 0.2% of the market's SOL reserve, small enough that sandwiching it costs an attacker more in fees than it makes. Buybacks still pay the market price.</li>
+        <li><strong>Locking costs rent.</strong> Each lock permanently uses about 0.002 SOL of the vault's budget for its token account. Small cycles spend proportionally more on rent, which is why there is a 0.02 SOL minimum.</li>
+        <li><strong>Locking is not burning.</strong> Locked tokens stay in the total supply. They just sit at addresses nobody controls.</li>
+        <li><strong>No third-party audit.</strong> The code is open, has been through an internal and an independent adversarial review (findings and fixes are in <a href="https://github.com/kryptoxerk-dot/lockedin/blob/main/docs/security.md" target="_blank" rel="noopener noreferrer">docs/security.md</a>), and is tested against mainnet's real pump.fun programs. It has not been audited by a security firm.</li>
+        <li><strong>It is a memecoin.</strong> Nothing here is investment advice or a promise about price.</li>
+      </ul>
+    </section>
+
+    <section id="verify">
+      <h2>Verify it yourself</h2>
+      <ol class="docs-steps">
+        <li><strong>Same code as deployed.</strong> The program is built in a pinned Docker image, so anyone can rebuild it and compare hashes. Solscan and Solana Explorer show it as a verified build of the public repository.</li>
+        <li><strong>Nobody can change it.</strong> <code>solana program show EMs5GHLJ1MMGrvVxVQKLjpSXpmkeNfc2gXjvAVEhBr2J</code> reports <code>Authority: none</code>.</li>
+        <li><strong>Nobody can pause it.</strong> The config account's admin is <code>11111111111111111111111111111111</code>.</li>
+        <li><strong>The split is 50/50 and frozen.</strong> The token's pump.fun fee-sharing config lists the vault and the creator at 5,000 bps each, and can no longer be edited.</li>
+        <li><strong>Every lock is real.</strong> Lock <em>n</em> is the program address for <code>["hold", mint, n]</code>. It is off the ed25519 curve, so it has no key. <a href="/#locks">The wall</a> lists every one with its balance.</li>
+      </ol>
+      <p>Step-by-step commands are in <a href="https://github.com/kryptoxerk-dot/lockedin/blob/main/docs/verify.md" target="_blank" rel="noopener noreferrer">docs/verify.md</a>. The full test output is in <a href="https://github.com/kryptoxerk-dot/lockedin/tree/main/docs/readiness" target="_blank" rel="noopener noreferrer">docs/readiness</a>.</p>
+    </section>
+
+    <section id="addresses">
+      <h2>Addresses</h2>
+      <dl class="docs-addresses">
+        <div><dt>Program</dt><dd><code>EMs5GHLJ1MMGrvVxVQKLjpSXpmkeNfc2gXjvAVEhBr2J</code></dd></div>
+        <div><dt>Token mint</dt><dd><code>Published at launch</code></dd></div>
+        <div><dt>Source code</dt><dd><a href="https://github.com/kryptoxerk-dot/lockedin" target="_blank" rel="noopener noreferrer">github.com/kryptoxerk-dot/lockedin</a></dd></div>
+      </dl>
+    </section>
+  </article>
+</main>
+
+<footer class="footer">
+  <div class="wrap footer-inner">
+    <a class="brand" href="/"><img src="/assets/logo.png" alt="" width="32" height="32"><span class="brand-name">Locked In</span></a>
+    <p>Open source under the MIT license.</p>
+    <p class="note">Solana · $LOCKEDIN</p>
+  </div>
+</footer>
+</body>
+</html>

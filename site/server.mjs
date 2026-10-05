@@ -270,7 +270,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Static, with the path confined to the public directory.
-  let file = url.pathname === "/" ? "index.html" : url.pathname.replace(/^\/+/, "");
+  let file = url.pathname === "/" ? "index.html" : url.pathname === "/docs" ? "docs.html" : url.pathname.replace(/^\/+/, "");
   const full = path.join(PUBLIC, file);
   const relative = path.relative(PUBLIC, full);
   if (relative.startsWith("..") || path.isAbsolute(relative)) {

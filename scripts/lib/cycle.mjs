@@ -43,6 +43,10 @@ export const WSOL_ATA_RENT = 2_039_280;
 export const HOLDER_ATA_RENT_CEILING_BYTES = 200;
 export const MIN_CYCLE = 20_000_000;
 export const CALLER_REIMBURSEMENT = 50_000;
+/** Per-cycle cap as a share of the market's SOL reserve; must match the program. */
+export const RESERVE_CAP_BPS = 20n;
+/** pump BondingCurve: discriminator, virtual_token_reserves, then virtual_quote_reserves. */
+const CURVE_VIRTUAL_SOL_OFFSET = 16;
 
 const BUY_DISCRIMINATOR = Buffer.from([102, 6, 61, 18, 1, 218, 235, 234]);
 
@@ -158,13 +162,35 @@ export async function holderAtaRent(connection, vaultAta) {
  * in the keeper does not overspend -- the program reserves the same amounts --
  * it just builds a buy the program then rejects.
  */
-export function spendable(vaultLamports, { graduated, holderRent }) {
+export function spendable(
+  vaultLamports,
+  { graduated, holderRent, vaultRent = VAULT_RENT, wsolRent = WSOL_ATA_RENT },
+) {
   const reserved =
-    VAULT_RENT +
+    vaultRent +
     holderRent +
     CALLER_REIMBURSEMENT +
-    (graduated ? WSOL_ATA_RENT : 0);
+    (graduated ? wsolRent : 0);
   return Math.max(0, vaultLamports - reserved);
+}
+
+/**
+ * What one cycle may spend: the program's cycle_budget, integer for integer.
+ * The cap is a share of the SOL reserve of the market being bought from, read
+ * at build time; the program reads it again at execution, and a keeper that
+ * asked for more than that would build a buy pump rejects.
+ */
+export function cycleBudget(available, solReserve) {
+  const cap = (BigInt(solReserve) * RESERVE_CAP_BPS) / 10_000n;
+  const floor = cap > BigInt(MIN_CYCLE) ? cap : BigInt(MIN_CYCLE);
+  return Number(BigInt(available) < floor ? BigInt(available) : floor);
+}
+
+/** The bonding curve's SOL side, from the account the program reads. */
+export async function curveSolReserve(connection, mint) {
+  const info = await connection.getAccountInfo(pump.bondingCurvePda(mint));
+  if (!info || info.data.length < CURVE_VIRTUAL_SOL_OFFSET + 8) throw new Error("bonding curve account missing");
+  return info.data.readBigUInt64LE(CURVE_VIRTUAL_SOL_OFFSET);
 }
 
 /** Has the token left the bonding curve? Decides which instruction runs. */
@@ -211,10 +237,16 @@ export async function buildCycle(
   const graduated = await isGraduated(connection, mint);
   const lamports = await connection.getBalance(vault);
   const holderRent = await holderAtaRent(connection, vaultAta);
-  const budget = budgetOverride ?? spendable(lamports, { graduated, holderRent });
-  if (budget < MIN_CYCLE) {
-    return { ready: false, reason: "below the minimum cycle", budget, graduated };
+  // The program reads rent from the cluster; so does this.
+  const vaultRent = await connection.getMinimumBalanceForRentExemption(0);
+  const wsolRent = await connection.getMinimumBalanceForRentExemption(165);
+  const available = budgetOverride ?? spendable(lamports, { graduated, holderRent, vaultRent, wsolRent });
+  if (available < MIN_CYCLE) {
+    return { ready: false, reason: "below the minimum cycle", budget: available, graduated };
   }
+  // Capped by the market's SOL reserve; the AMM branch replaces this once it
+  // has read the pool.
+  let budget = budgetOverride ?? (graduated ? available : cycleBudget(available, await curveSolReserve(connection, mint)));
 
   const global = await online.fetchGlobal();
   const feeConfig = await online.fetchFeeConfig();
@@ -229,6 +261,7 @@ export async function buildCycle(
     if (!state.pool.baseMint.equals(mint) || !state.pool.quoteMint.equals(WSOL)) {
       throw new Error("the canonical pool is not this mint against SOL");
     }
+    if (budgetOverride === null) budget = cycleBudget(available, state.poolQuoteAmount.toString());
     const quote = amm.buyQuoteInput({
       quote: new BN(budget),
       slippage: 0,
@@ -324,6 +357,11 @@ export async function buildCycle(
       if (infos[n]) continue;
       const target = writable[n];
       if (target.equals(volumeAccumulator)) continue;
+      // The vault's own wrapped-SOL account is closed at the end of every
+      // cycle and re-created by the program at the vault's expense. Creating
+      // it here would charge the caller its rent on every PumpSwap cycle and
+      // hand that rent to the vault when the cycle closes it.
+      if (target.equals(vaultWsol)) continue;
       let matched = false;
       for (const owner of owners) {
         for (const [m, prog] of pairs) {

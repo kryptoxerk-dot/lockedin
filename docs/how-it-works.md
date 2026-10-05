@@ -27,9 +27,9 @@ The script then registers the mint with the program, which creates the counter a
 Anyone can submit one. Our keeper (`scripts/keeper.mjs`) does it automatically, every minute, when there is enough to spend.
 
 1. **Distribute fees.** pump.fun holds creator fees until someone calls its permissionless distribute instruction; that sends each shareholder its half.
-2. **Reserve.** The program sets aside the vault's own rent, rent for the new holder's token account, and the 0.00005 SOL submitter fee. The rest is the budget. It must be at least 0.02 SOL, or the cycle is refused.
+2. **Reserve and cap.** The program sets aside the vault's own rent, rent for the new holder's token account, and the 0.00005 SOL submitter fee. What is left must be at least 0.02 SOL, or the cycle is refused. The cycle's budget is that amount, capped at 0.2% of the market's SOL reserve, which the program reads from the curve or pool account itself. The cap means a caller cannot make the vault buy enough at once to profit from sandwiching it. Anything above the cap waits for the next cycle.
 3. **Buy.** The vault buys $LOCKEDIN on pump.fun's bonding curve, or on the canonical PumpSwap pool once the token has graduated. The program re-derives the pool itself rather than trusting the caller, and checks that the buyer is the vault and the token is this mint.
-4. **Spend check.** The buy must spend at least 50% of the budget. Otherwise a caller could ask for one token and make the vault pay rent for a near-empty holder.
+4. **Spend check.** The buy must spend at least 65% of the budget. Otherwise a caller could ask for one token and make the vault pay rent for a near-empty holder.
 5. **Lock.** The vault's entire token balance moves to holder *n*. The program derives holder *n* itself, so the caller cannot choose where the tokens go.
 6. **Count.** The counter records the new holder and the amount.
 

@@ -49,6 +49,10 @@ import {
   errorCode,
   settleAndBuild,
   signAndSend,
+  simulateBuilt,
+  isSlippage,
+  curveSolReserve,
+  cycleBudget,
 } from "./lib/cycle.mjs";
 
 const config = configPda();
@@ -503,6 +507,93 @@ console.log("\n9. giving up the pause, for good\n" + "-".repeat(72));
 
   await expectRefusal("the former admin pausing after renouncing", pauseIx(payer.publicKey, true), "NotAdmin");
   note("anyone can check this: read the config account's admin field");
+}
+
+// ------------------------------------------------------------------ 10
+// The cycle is permissionless and the caller picks the token amount, so a
+// caller can push the price up, run the cycle at that price and sell into the
+// vault's buy, all at once. Each cycle may spend at most RESERVE_CAP_BPS of the
+// curve's SOL reserve, which keeps the vault's own price move below the
+// attacker's round-trip fee. Found by an independent review before deploy.
+console.log("\n10. sandwiching a cycle\n" + "-".repeat(72));
+{
+  const C = await freshToken("ADVC");
+  await fund(C.vault, 2_000_000_000); // 2 SOL waiting: far more than one cycle may spend
+  const reserve = await curveSolReserve(connection, C.mint);
+  const cap = cycleBudget(Number.MAX_SAFE_INTEGER, reserve);
+  note(`curve SOL reserve ${reserve}; one cycle may spend at most ${cap} lamports`);
+
+  // (a) Asking for everything the vault holds: pump is told the budget is the
+  // cap, so a token amount priced at the whole vault cannot fill.
+  const greedy = await settleAndBuild(
+    connection,
+    { mint: C.mint, caller: payer.publicKey, index: 0, marginPercent: 99, budgetOverride: 1_990_000_000 },
+    payer,
+  );
+  if (!greedy.ready) throw new Error(`could not build the greedy cycle: ${greedy.reason}`);
+  const greedySim = await simulateBuilt(connection, greedy, payer.publicKey);
+  if (greedySim.err && isSlippage(greedySim)) ok("a cycle priced at the whole vault is refused: pump only accepts the capped budget");
+  else bad(`a cycle priced at the whole vault was not refused as over budget: ${JSON.stringify(greedySim.err)}`);
+
+  // (b) The full sandwich, by a funded attacker who also submits the cycle.
+  const attacker = Keypair.generate();
+  await sendAndConfirmTransaction(connection, new Transaction().add(
+    SystemProgram.transfer({ fromPubkey: payer.publicKey, toPubkey: attacker.publicKey, lamports: 30_000_000_000 }),
+  ), [payer]);
+  const start = await connection.getBalance(attacker.publicKey);
+  const global = await online.fetchGlobal();
+  const feeConfig = await online.fetchFeeConfig();
+  const supply = new BN((await connection.getTokenSupply(C.mint)).value.amount);
+  const push = new BN(20_000_000_000); // 20 SOL to move the price
+  const buyState = await online.fetchBuyState(C.mint, attacker.publicKey);
+  const pushTokens = pump.getBuyTokenAmountFromSolAmount({
+    global, feeConfig, mintSupply: supply, bondingCurve: buyState.bondingCurve, amount: push, quoteMint: WSOL,
+  });
+  await sendAndConfirmTransaction(connection, new Transaction().add(
+    ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }),
+    ...(await sdk.buyInstructions({
+      global, bondingCurveAccountInfo: buyState.bondingCurveAccountInfo, bondingCurve: buyState.bondingCurve,
+      associatedUserAccountInfo: buyState.associatedUserAccountInfo, mint: C.mint, user: attacker.publicKey,
+      amount: pushTokens, solAmount: push, slippage: 2, tokenProgram: C.tokenProgram,
+    })),
+  ), [attacker]);
+
+  const vaultBefore = await connection.getBalance(C.vault);
+  const cycle = await settleAndBuild(
+    connection,
+    { mint: C.mint, caller: attacker.publicKey, index: 0, marginPercent: 99 },
+    attacker,
+  );
+  if (!cycle.ready) throw new Error(`could not build the attacker's cycle: ${cycle.reason}`);
+  await signAndSend(connection, cycle, attacker);
+  const vaultAfter = await connection.getBalance(C.vault);
+
+  const attackerAta = ataFor(attacker.publicKey, C.tokenProgram, C.mint);
+  const held = new BN((await tokenBalance(connection, attackerAta)).toString());
+  const sellState = await online.fetchSellState(C.mint, attacker.publicKey);
+  const out = pump.getSellSolAmountFromTokenAmount({
+    global, feeConfig, mintSupply: supply, bondingCurve: sellState.bondingCurve, amount: held,
+  });
+  await sendAndConfirmTransaction(connection, new Transaction().add(
+    ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }),
+    ...(await sdk.sellInstructions({
+      global, bondingCurveAccountInfo: sellState.bondingCurveAccountInfo, bondingCurve: sellState.bondingCurve,
+      mint: C.mint, user: attacker.publicKey, amount: held, solAmount: out, slippage: 2,
+      tokenProgram: C.tokenProgram, mayhemMode: false,
+    })),
+  ), [attacker]);
+
+  // Count the attacker's token account rent as theirs: it can be reclaimed.
+  const end = (await connection.getBalance(attacker.publicKey)) + ((await connection.getAccountInfo(attackerAta))?.lamports ?? 0);
+  const net = end - start;
+  const vaultSpent = vaultBefore - vaultAfter;
+  note(`the vault's cycle cost ${vaultSpent} lamports, rent and fee included; the cap is ${cycle.budget}`);
+  if (vaultSpent <= cycle.budget + cycle.holderRent + 50_000) ok("the cycle spent no more than its capped budget, rent and fee");
+  else bad(`the cycle spent ${vaultSpent}, more than budget ${cycle.budget} + rent + fee`);
+  if (vaultAfter >= 2_000_000_000 - cycle.budget - cycle.holderRent - 50_000 - 1_000_000) ok("everything above the cap stayed in the vault for the next cycle");
+  else bad(`the vault fell to ${vaultAfter}`);
+  if (net < 0) ok(`the sandwich lost the attacker ${(-net / 1e9).toFixed(6)} SOL`);
+  else bad(`the sandwich PROFITED ${(net / 1e9).toFixed(6)} SOL`);
 }
 
 console.log("\n" + "=".repeat(72));

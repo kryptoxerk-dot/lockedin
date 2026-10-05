@@ -114,6 +114,16 @@ for(let n=0;n<4;n++)await ammBuy();
 const ammFees=await feeState(connection,mint,keeper.publicKey);
 ok(ammFees.graduated&&ammFees.canDistribute&&ammFees.distributableLamports>0n,'Real PumpSwap trades produced distributable creator fees');
 await keeperCycle('pumpswap');
+// A repeat PumpSwap cycle, once every one-time account exists, must cost the
+// keeper only transaction fees. It used to pre-create the vault's wrapped-SOL
+// account on every cycle -- about 0.002 SOL each, closed into the vault -- which
+// would have emptied a 0.1 SOL keeper after about 44 cycles.
+for(let n=0;n<2;n++)await ammBuy();
+const keeperBefore=await connection.getBalance(keeper.publicKey);
+const repeat=run('keeper.mjs',['--once','--execute','--mint',mint.toBase58()]);
+const repeatLocked=repeat.split('\n').some(l=>{try{return JSON.parse(l).kind==='locked';}catch{return false;}});
+const keeperCost=keeperBefore-await connection.getBalance(keeper.publicKey);
+ok(repeatLocked&&keeperCost<500_000,`pumpswap: a repeat cycle costs the keeper only transaction fees (${keeperCost} lamports)`);
 console.log('== unattended keeper follows new trading activity ==');
 const baseline=await readCounter(connection,mint);
 const logFile=path.join(runDir,'unattended.log'),logFd=fs.openSync(logFile,'w',0o600);

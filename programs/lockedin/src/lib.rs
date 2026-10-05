@@ -41,16 +41,51 @@ pub const ASSOCIATED_TOKEN_PROGRAM: Pubkey =
 
 pub const PUMP_BUY_DISCRIMINATOR: [u8; 8] = [102, 6, 61, 18, 1, 218, 235, 234];
 pub const WSOL_MINT: Pubkey = anchor_spl::token::spl_token::native_mint::ID;
-/// Accounts PumpSwap's `buy` expects. One position wrong fails at runtime
-/// with nothing useful to say, so every index used below is checked.
-pub const AMM_BUY_ACCOUNTS: usize = 23;
-pub const PUMP_BUY_ACCOUNTS: usize = 18;
+/// The fewest accounts each `buy` may be given: one past the highest position
+/// this program reads. Pump validates its own account list, so these only make
+/// sure the positions read below exist. They are deliberately not today's full
+/// lists -- pump appends accounts often, and a minimum pinned to the current
+/// count would be one more thing a pump upgrade could break for ever.
+pub const AMM_BUY_MIN_ACCOUNTS: usize = 13;
+pub const PUMP_BUY_MIN_ACCOUNTS: usize = 9;
 pub const PUMP_BUY_MINT_INDEX: usize = 2;
+pub const PUMP_BUY_CURVE_INDEX: usize = 3;
 pub const PUMP_BUY_USER_INDEX: usize = 6;
+pub const AMM_BUY_POOL_QUOTE_INDEX: usize = 8;
 
-/// Rent for a system account with no data. The vault must never drop below it:
-/// a vault that stops existing has nowhere for the next fee payment to land.
-pub const VAULT_RENT_EXEMPT: u64 = 890_880;
+/// Offset of `virtual_quote_reserves` (the curve's SOL side) in pump's
+/// BondingCurve account: 8-byte discriminator, then virtual_token_reserves.
+pub const CURVE_VIRTUAL_SOL_OFFSET: usize = 16;
+
+/// The most one cycle may spend, as a share of the SOL side of the market it
+/// buys from: 0.20%.
+///
+/// The cycle is permissionless and the caller picks how many tokens to ask for,
+/// so a caller can buy first to push the price up, run the cycle so the vault
+/// buys at that price, and sell into the vault's buy -- all in one transaction.
+/// That only pays when the vault's buy moves the price by more than the
+/// attacker's round-trip fee. On a constant-product market a buy of b against a
+/// SOL reserve R moves the price by about 2b/R, and the cheapest round trip on
+/// either market costs at least 0.6% (PumpSwap's lowest fee tier; the curve's
+/// is 2.5%). At 0.2% of R the vault moves the price about 0.4%, so every such
+/// sandwich loses money, however much the attacker inflates R first. What the
+/// cap holds back stays in the vault for the next cycle.
+pub const RESERVE_CAP_BPS: u64 = 20;
+
+/// Rent for a system account with no data, read from the cluster. The vault
+/// must never drop below it: a vault that stops existing has nowhere for the
+/// next fee payment to land.
+fn vault_rent() -> Result<u64> {
+    Ok(Rent::get()?.minimum_balance(0))
+}
+
+/// What one cycle may spend: everything spendable, up to the reserve cap --
+/// but never capped below the minimum cycle, so a thin market slows the
+/// mechanism down instead of stopping it.
+fn cycle_budget(spendable: u64, sol_reserve: u64) -> u64 {
+    let cap = ((sol_reserve as u128) * (RESERVE_CAP_BPS as u128) / 10_000) as u64;
+    spendable.min(cap.max(MIN_CYCLE_LAMPORTS))
+}
 
 /// Rent for one Token-2022 associated token account.
 ///
@@ -73,9 +108,12 @@ fn holder_ata_rent(vault_ata: &UncheckedAccount) -> Result<u64> {
     Ok(Rent::get()?.minimum_balance(len))
 }
 
-/// Rent for a legacy SPL wrapped-SOL account. Unlike the holder's, this one is
-/// reclaimed: the account closes back into the vault at the end of the cycle.
-pub const WSOL_ATA_RENT: u64 = 2_039_280;
+/// Rent for a legacy SPL wrapped-SOL account (165 bytes), read from the
+/// cluster. Unlike the holder's, this one is reclaimed: the account closes
+/// back into the vault at the end of the cycle.
+fn wsol_ata_rent() -> Result<u64> {
+    Ok(Rent::get()?.minimum_balance(165))
+}
 
 /// The smallest cycle worth running, chosen so account rent is about 8% of the
 /// spend. Below this the mechanism mostly buys rent instead of tokens.
@@ -92,20 +130,30 @@ pub const MIN_CYCLE_LAMPORTS: u64 = 20_000_000;
 /// found before deploy by asking what a hostile caller would choose; none of
 /// the tests at the time tried a funded vault with a dust buy.
 ///
-/// Half is far below anything the keeper's slippage ladder reaches (its lowest
-/// rung spends about three quarters) and far above anything a dust buy can.
-pub const MIN_SPEND_BPS: u64 = 5_000;
+/// 65% is below anything the keeper's slippage ladder reaches (its lowest rung
+/// spends about three quarters) and far above anything a dust buy can. At the
+/// minimum cycle it keeps a deliberately thin cycle's rent overhead near 12%.
+pub const MIN_SPEND_BPS: u64 = 6_500;
 
 /// Refuse a cycle that spent less than MIN_SPEND_BPS of its budget.
 ///
-/// u128 because `spendable * 10_000` overflows a u64 above about 1.8 million
+/// u128 because `budget * 10_000` overflows a u64 above about 1.8 million
 /// SOL, and a check that wraps around is worse than no check.
-fn require_spent(spent: u64, spendable: u64) -> Result<()> {
+fn require_spent(spent: u64, budget: u64) -> Result<()> {
     require!(
-        (spent as u128) * 10_000 >= (spendable as u128) * (MIN_SPEND_BPS as u128),
+        (spent as u128) * 10_000 >= (budget as u128) * (MIN_SPEND_BPS as u128),
         LockError::UnderSpent
     );
     Ok(())
+}
+
+/// A little-endian u64 at `offset` in an account's data.
+fn read_u64(account: &AccountInfo, offset: usize) -> Result<u64> {
+    let data = account.try_borrow_data()?;
+    require!(data.len() >= offset + 8, LockError::BadPumpAccounts);
+    Ok(u64::from_le_bytes(
+        data[offset..offset + 8].try_into().map_err(|_| LockError::BadPumpAccounts)?,
+    ))
 }
 
 /// What a caller may be paid back for submitting a cycle.
@@ -171,8 +219,9 @@ pub mod lockedin {
         // The vault is a plain system account that receives fee payments. It
         // needs rent before anything can pay into it.
         let vault = ctx.accounts.vault.to_account_info();
-        if vault.lamports() < VAULT_RENT_EXEMPT {
-            let top_up = VAULT_RENT_EXEMPT - vault.lamports();
+        let rent = vault_rent()?;
+        if vault.lamports() < rent {
+            let top_up = rent - vault.lamports();
             anchor_lang::solana_program::program::invoke(
                 &system_instruction::transfer(ctx.accounts.payer.key, vault.key, top_up),
                 &[
@@ -191,9 +240,10 @@ pub mod lockedin {
     /// Atomic by construction: the buy, the transfer and the counter bump are
     /// one instruction, so a purchase can never be left sitting anywhere it
     /// could be sold from. `token_amount` is how many tokens to ask for and the
-    /// spendable balance caps what will be paid, so the trade fills at the
+    /// cycle's budget -- the spendable balance, capped at RESERVE_CAP_BPS of the
+    /// market's SOL reserve -- caps what will be paid, so the trade fills at the
     /// market's price or pump.fun rejects it. The caller cannot make the vault
-    /// overpay beyond what it holds, and cannot choose where the tokens land.
+    /// spend more than the budget, and cannot choose where the tokens land.
     pub fn lock_in_cycle(
         ctx: Context<LockInCycle>,
         token_amount: u64,
@@ -207,19 +257,6 @@ pub mod lockedin {
 
         let index = counter.next_index;
         let vault = ctx.accounts.vault.to_account_info();
-
-        // Everything this cycle must pay for, reserved before deciding how much
-        // is left to spend on tokens. The vault funds its own rent, the new
-        // holder's rent and the caller's fee -- the keeper funds nothing.
-        //
-        // A keeper that fronts per-cycle rent it never recovers runs dry after
-        // a dozen or so cycles, then declines once a minute while looking
-        // exactly like "no fees have arrived yet". So the vault pays.
-        let reserved = VAULT_RENT_EXEMPT
-            .saturating_add(holder_ata_rent(&ctx.accounts.vault_ata)?)
-            .saturating_add(MAX_CALLER_REIMBURSEMENT);
-        let spendable = vault.lamports().saturating_sub(reserved);
-        require!(spendable >= MIN_CYCLE_LAMPORTS, LockError::CycleTooSmall);
 
         // --- the holder for this cycle, derived rather than supplied --------
         let index_bytes = index.to_le_bytes();
@@ -247,7 +284,7 @@ pub mod lockedin {
 
         // --- the three things pump.fun will not check for us ---------------
         let accounts = ctx.remaining_accounts;
-        require!(accounts.len() >= PUMP_BUY_ACCOUNTS, LockError::BadPumpAccounts);
+        require!(accounts.len() >= PUMP_BUY_MIN_ACCOUNTS, LockError::BadPumpAccounts);
         require_keys_eq!(
             ctx.accounts.pump_program.key(),
             PUMP_PROGRAM,
@@ -275,6 +312,29 @@ pub mod lockedin {
         require_keys_eq!(accounts[8].key(), token_program_key, LockError::BadPumpAccounts);
         require_keys_eq!(*ctx.accounts.mint.owner, token_program_key, LockError::BadPumpAccounts);
 
+        // The curve this mint trades on, derived and owner-checked here rather
+        // than left to pump, because its reserve sets this cycle's cap.
+        let curve = &accounts[PUMP_BUY_CURVE_INDEX];
+        let (expected_curve, _) =
+            Pubkey::find_program_address(&[b"bonding-curve", mint_key.as_ref()], &PUMP_PROGRAM);
+        require_keys_eq!(curve.key(), expected_curve, LockError::BadPumpAccounts);
+        require_keys_eq!(*curve.owner, PUMP_PROGRAM, LockError::BadPumpAccounts);
+        let curve_sol = read_u64(curve, CURVE_VIRTUAL_SOL_OFFSET)?;
+
+        // Everything this cycle must pay for, reserved before deciding how much
+        // is left to spend on tokens. The vault funds its own rent, the new
+        // holder's rent and the caller's fee -- the keeper funds nothing.
+        //
+        // A keeper that fronts per-cycle rent it never recovers runs dry after
+        // a dozen or so cycles, then declines once a minute while looking
+        // exactly like "no fees have arrived yet". So the vault pays.
+        let reserved = vault_rent()?
+            .saturating_add(holder_ata_rent(&ctx.accounts.vault_ata)?)
+            .saturating_add(MAX_CALLER_REIMBURSEMENT);
+        let spendable = vault.lamports().saturating_sub(reserved);
+        require!(spendable >= MIN_CYCLE_LAMPORTS, LockError::CycleTooSmall);
+        let budget = cycle_budget(spendable, curve_sol);
+
         let vault_bump = [counter.vault_bump];
         let vault_seeds: &[&[u8]] = &[SEED_VAULT, mint_key.as_ref(), &vault_bump];
 
@@ -290,7 +350,7 @@ pub mod lockedin {
         let mut data = Vec::with_capacity(25);
         data.extend_from_slice(&PUMP_BUY_DISCRIMINATOR);
         data.extend_from_slice(&token_amount.to_le_bytes());
-        data.extend_from_slice(&spendable.to_le_bytes());
+        data.extend_from_slice(&budget.to_le_bytes()); // max_sol_cost
         data.push(0); // track_volume: Option<bool> = None
 
         let metas: Vec<AccountMeta> = accounts
@@ -317,7 +377,7 @@ pub mod lockedin {
             bought > 0 && bought >= min_tokens_locked,
             LockError::NothingBought
         );
-        require_spent(lamports_before_buy.saturating_sub(vault.lamports()), spendable)?;
+        require_spent(lamports_before_buy.saturating_sub(vault.lamports()), budget)?;
 
         // --- 3. lock: everything bought, into the holder --------------------
         transfer_all_to_holder(
@@ -385,15 +445,6 @@ pub mod lockedin {
         let vault = ctx.accounts.vault.to_account_info();
         let token_program_key = ctx.accounts.token_program.key();
 
-        // The wrapped-SOL account's rent is reserved too. It comes back when
-        // the account closes at the end, but it has to be there to begin with.
-        let reserved = VAULT_RENT_EXEMPT
-            .saturating_add(holder_ata_rent(&ctx.accounts.vault_ata)?)
-            .saturating_add(WSOL_ATA_RENT)
-            .saturating_add(MAX_CALLER_REIMBURSEMENT);
-        let spendable = vault.lamports().saturating_sub(reserved);
-        require!(spendable >= MIN_CYCLE_LAMPORTS, LockError::CycleTooSmall);
-
         let index_bytes = index.to_le_bytes();
         let (expected_holder, _) =
             Pubkey::find_program_address(&[SEED_HOLDER, mint_key.as_ref(), &index_bytes], &crate::ID);
@@ -408,7 +459,7 @@ pub mod lockedin {
 
         // --- the pool, derived rather than trusted --------------------------
         let accounts = ctx.remaining_accounts;
-        require!(accounts.len() >= AMM_BUY_ACCOUNTS, LockError::BadPumpAccounts);
+        require!(accounts.len() >= AMM_BUY_MIN_ACCOUNTS, LockError::BadPumpAccounts);
         require_keys_eq!(
             ctx.accounts.pump_program.key(),
             PUMP_AMM_PROGRAM,
@@ -438,6 +489,27 @@ pub mod lockedin {
         require_keys_eq!(accounts[5].key(), base_ata, LockError::BadPumpAccounts);
         require_keys_eq!(accounts[6].key(), quote_ata, LockError::BadPumpAccounts);
 
+        // The pool's wrapped-SOL reserve, derived and owner-checked here
+        // because it sets this cycle's cap.
+        let pool_quote = &accounts[AMM_BUY_POOL_QUOTE_INDEX];
+        require_keys_eq!(
+            pool_quote.key(),
+            associated_token_address(&pool, &anchor_spl::token::ID, &WSOL_MINT),
+            LockError::BadPumpAccounts
+        );
+        require_keys_eq!(*pool_quote.owner, anchor_spl::token::ID, LockError::BadPumpAccounts);
+        let pool_sol = token_account_amount(pool_quote)?;
+
+        // The wrapped-SOL account's rent is reserved too. It comes back when
+        // the account closes at the end, but it has to be there to begin with.
+        let reserved = vault_rent()?
+            .saturating_add(holder_ata_rent(&ctx.accounts.vault_ata)?)
+            .saturating_add(wsol_ata_rent()?)
+            .saturating_add(MAX_CALLER_REIMBURSEMENT);
+        let spendable = vault.lamports().saturating_sub(reserved);
+        require!(spendable >= MIN_CYCLE_LAMPORTS, LockError::CycleTooSmall);
+        let budget = cycle_budget(spendable, pool_sol);
+
         let vault_bump = [counter.vault_bump];
         let vault_seeds: &[&[u8]] = &[SEED_VAULT, mint_key.as_ref(), &vault_bump];
 
@@ -451,9 +523,9 @@ pub mod lockedin {
             &[vault_seeds],
         )?;
 
-        // --- 2. wrap exactly what is about to be spent ----------------------
+        // --- 2. wrap exactly what this cycle may spend -----------------------
         invoke_signed(
-            &system_instruction::transfer(vault.key, &quote_ata, spendable),
+            &system_instruction::transfer(vault.key, &quote_ata, budget),
             &[
                 vault.clone(),
                 ctx.accounts.vault_wsol.to_account_info(),
@@ -475,13 +547,13 @@ pub mod lockedin {
 
         // --- 3. buy ---------------------------------------------------------
         let before = token_account_amount(&ctx.accounts.vault_ata)?;
-        // Exactly `spendable` was wrapped above, so what the buy spent is the
-        // wrapped balance before minus after.
+        // `budget` was wrapped above, so what the buy spent is the wrapped
+        // balance before minus after.
         let wsol_before = token_account_amount(&ctx.accounts.vault_wsol)?;
         let mut data = Vec::with_capacity(25);
         data.extend_from_slice(&PUMP_BUY_DISCRIMINATOR);
         data.extend_from_slice(&token_amount.to_le_bytes());
-        data.extend_from_slice(&spendable.to_le_bytes());
+        data.extend_from_slice(&budget.to_le_bytes()); // max_quote_amount_in
         data.push(0);
         let metas: Vec<AccountMeta> = accounts
             .iter()
@@ -505,7 +577,7 @@ pub mod lockedin {
         let bought = after.saturating_sub(before);
         require!(bought > 0 && bought >= min_tokens_locked, LockError::NothingBought);
         let wsol_after = token_account_amount(&ctx.accounts.vault_wsol)?;
-        require_spent(wsol_before.saturating_sub(wsol_after), spendable)?;
+        require_spent(wsol_before.saturating_sub(wsol_after), budget)?;
 
         // --- 4. lock ---------------------------------------------------------
         transfer_all_to_holder(&ctx, after, base_ata, expected_holder_ata, &[vault_seeds])?;
@@ -574,7 +646,7 @@ fn associated_token_address(owner: &Pubkey, token_program: &Pubkey, mint: &Pubke
 /// 64 of the base account, with Token-2022's extensions appended after it, so
 /// the offset holds for either. anchor-spl's `token_interface` would be the
 /// tidy way to do this and its token_2022 feature does not compile here.
-fn token_account_amount(account: &UncheckedAccount) -> Result<u64> {
+fn token_account_amount(account: &AccountInfo) -> Result<u64> {
     let data = account.try_borrow_data()?;
     require!(data.len() >= 72, LockError::BadTokenAccount);
     Ok(u64::from_le_bytes(
@@ -595,7 +667,7 @@ fn reimburse_caller(ctx: &Context<LockInCycle>, signer: &[&[&[u8]]]) -> Result<(
     // Never at the cost of the vault's own rent exemption: an account drained
     // below it stops existing, and the next fee payment would have nowhere to
     // land. Skipping the payment is the right failure here.
-    if vault.lamports() < VAULT_RENT_EXEMPT.saturating_add(MAX_CALLER_REIMBURSEMENT) {
+    if vault.lamports() < vault_rent()?.saturating_add(MAX_CALLER_REIMBURSEMENT) {
         return Ok(());
     }
     invoke_signed(
@@ -620,6 +692,10 @@ fn reimburse_caller(ctx: &Context<LockInCycle>, signer: &[&[&[u8]]]) -> Result<(
 /// — so a residue left by an earlier partially-failed attempt cannot sit in an
 /// account the vault can still spend from. The vault's token account is empty
 /// at the end of every cycle.
+///
+/// `TransferChecked`, not plain `Transfer`: Token-2022 refuses the plain form
+/// for mints carrying some extensions, and this program is immutable before
+/// the mint exists. The checked form works for every mint the plain one does.
 fn transfer_all_to_holder(
     ctx: &Context<LockInCycle>,
     amount: u64,
@@ -627,14 +703,22 @@ fn transfer_all_to_holder(
     to: Pubkey,
     signer: &[&[&[u8]]],
 ) -> Result<()> {
-    let mut data = Vec::with_capacity(9);
-    data.push(3u8); // SPL Token / Token-2022 Transfer
+    // Base mint layout, shared by SPL Token and Token-2022: decimals at byte 44.
+    let decimals = {
+        let mint = ctx.accounts.mint.try_borrow_data()?;
+        require!(mint.len() >= 82, LockError::BadTokenAccount);
+        mint[44]
+    };
+    let mut data = Vec::with_capacity(10);
+    data.push(12u8); // TransferChecked
     data.extend_from_slice(&amount.to_le_bytes());
+    data.push(decimals);
     invoke_signed(
         &anchor_lang::solana_program::instruction::Instruction {
             program_id: ctx.accounts.token_program.key(),
             accounts: vec![
                 AccountMeta::new(from, false),
+                AccountMeta::new_readonly(ctx.accounts.mint.key(), false),
                 AccountMeta::new(to, false),
                 AccountMeta::new_readonly(ctx.accounts.vault.key(), true),
             ],
@@ -642,6 +726,7 @@ fn transfer_all_to_holder(
         },
         &[
             ctx.accounts.vault_ata.to_account_info(),
+            ctx.accounts.mint.to_account_info(),
             ctx.accounts.holder_ata.to_account_info(),
             ctx.accounts.vault.to_account_info(),
             ctx.accounts.token_program.to_account_info(),

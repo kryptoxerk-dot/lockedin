@@ -17,3 +17,15 @@ Solana CLI 2.1.21 on the host; the owner's PC has 4.2.2, whose deploy flags were
 First attempt found one real defect, fixed before this run: init sent in the same slot as the
 deploy can fail because a program is only callable from the next slot. program-setup.mjs now
 waits two slots and retries.
+Running as unit: lockedin-otter.service; invocation ID: 0f618bd3d17040bdac20e30c95ee2112
+  deployed; on-chain bytes match the tested binary
+  config initialised: 52fV2Ya9FZWb7LhAuP4rz1txPZwBXjMf8JBn41YfHXCmgvxELFaNCouBPNyqtcB9wV4vF19ajGLtTrj2hV4QURA
+3. record the verified build
+  record    D38jUdGKx3V1vN5RUyvuDiJarGmMMVj9Fhnb32oCQ85n
+  verified-build record written: 5gxQrmbvzoZULNNzg4q5ygmibhboC8SAVPSgY7bGumskGMc8RY2JCATwfqfYRKw4H6pDYXWBg4bXVpAniKTewKeZ
+  confirmed on chain: the record names this repository and commit
+  record    D38jUdGKx3V1vN5RUyvuDiJarGmMMVj9Fhnb32oCQ85n (exists; updating)
+  verified-build record written: 3oLfpsMveGspW3ebPGrjTXgKRV2DDdhAAqAsHN6Q9G4FbJRBroFdyScCPtQekaVYxUEpJgJegJ2viE2aXd1kxTv
+  confirmed on chain: the record names this repository and commit
+{"owner":"verifycLy8mB96wd9wqq3WDXQwM4oU6r42Th37Db9fC","program":"2WAqDPfUkZ2HL158apyQjrM5yAHYbSEoZjppmBH27fu6","signer":"3HvTy51fMf9bAbjX9zxgRfm9J8DG3yivkTD2rHA6AEuH","version":"0.5.2","git_url":"https://github.com/kryptoxerk-dot/lockedin","commit":"0123456789abcdef0123456789abcdef01234567","args":["--library-name","lockedin"],"deployed_slot":"14"}
+PASS record decodes to exactly what was written

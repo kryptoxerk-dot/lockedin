@@ -17,7 +17,7 @@ This repository is the complete source of that mechanism: the on-chain program, 
 ## How it works
 
 1. **Trading pays creator fees.** pump.fun charges a creator fee on every trade. At creation the token's fee split is set to 50% buyback vault and 50% creator wallet, then frozen. pump.fun refuses any later change.
-2. **The vault buys.** Once the vault can cover a buyback plus account rent, anyone can run a cycle. It buys $LOCKEDIN on the bonding curve, or on PumpSwap after graduation, and spends at least half of what it can.
+2. **The vault buys.** Once the vault can cover a buyback plus account rent, anyone can run a cycle. It buys $LOCKEDIN on the bonding curve, or on PumpSwap after graduation. Each cycle spends at most 0.2% of the market's SOL reserve, so nobody can profitably sandwich it; anything above that waits for the next cycle.
 3. **Locked in a keyless wallet.** In the same instruction the entire purchase moves to a fresh program-derived address. No private key exists for it.
 4. **One more locked holder.** The on-chain counter goes up by one. Supply does not change: this is a lock, not a burn.
 
@@ -29,7 +29,7 @@ More detail: [docs/how-it-works.md](docs/how-it-works.md).
 - It **cannot send vault SOL anywhere except a pump.fun buy of this token** (including pump.fun's own trading fees on that buy). The only other payments are rent for the new holder's token account and a fixed 0.00005 SOL to whoever submits the cycle.
 - After launch it **cannot be changed**. Its upgrade authority is removed, and its pause admin is set to an address nobody can sign for, before the token is created. You can check both on-chain.
 
-What can still go wrong, in plain words: [docs/security.md](docs/security.md).
+Review findings, fixes and what can still go wrong: [docs/security.md](docs/security.md).
 
 ## Verify it yourself
 
