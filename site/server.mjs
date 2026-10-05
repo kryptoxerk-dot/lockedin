@@ -45,6 +45,7 @@ const PORT = Number(process.env.PORT ?? 8787);
 const RPC = process.env.RPC_URL ?? "https://api.mainnet-beta.solana.com";
 const REFRESH_MS = Math.max(10_000, Number(process.env.REFRESH_MS ?? 30_000));
 const RECEIPTS = process.env.KEEPER_RECEIPTS_PATH ?? path.join(HERE, "..", "data", "receipts.jsonl");
+const FORWARDER = process.env.FORWARD_STATUS_PATH ?? path.join(HERE, "..", "data", "forwarder-status.json");
 
 const mint = process.env.LOCKEDIN_MINT ? new PublicKey(process.env.LOCKEDIN_MINT) : null;
 const vault = mint ? vaultPda(mint) : null;
@@ -96,6 +97,22 @@ function keeperHealth() {
     }
   } catch { /* none */ }
   return null;
+}
+
+/**
+ * Whether the creator's half is being forwarded to the vault. Active only while
+ * the forwarder is sending and has reported in the last ten minutes, so the
+ * page stops saying 100% the moment that stops being true.
+ */
+function forwarding() {
+  try {
+    const f = JSON.parse(fs.readFileSync(FORWARDER, "utf8"));
+    if (f.vault !== vault?.toBase58()) return null;
+    const ageMs = Date.now() - new Date(f.updatedAt).getTime();
+    return { active: f.mode === "executing" && ageMs < 600_000, since: f.since, creator: f.creator, forwardedLamports: Number(f.forwarded), dueLamports: Number(f.due), ageMs };
+  } catch {
+    return null;
+  }
 }
 
 let snapshot = { ready: false, error: "not read yet" };
@@ -248,7 +265,7 @@ const server = http.createServer(async (req, res) => {
 
   if (url.pathname === "/api/state") {
     const ageMs = snapshot.updatedAt ? Date.now() - new Date(snapshot.updatedAt).getTime() : null;
-    return json(res, 200, { ...snapshot, ageMs, refreshMs: REFRESH_MS });
+    return json(res, 200, { ...snapshot, forwarding: forwarding(), ageMs, refreshMs: REFRESH_MS });
   }
 
   if (url.pathname === "/api/holders") {

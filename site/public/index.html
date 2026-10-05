@@ -47,7 +47,7 @@
       <p class="kicker">You know the pose.</p>
       <h1 id="hero-title"><span class="h1-line">Locked</span><span class="h1-line h1-in">in.</span></h1>
       <p class="hero-line">Lean forward. Lock in.</p>
-      <p class="hero-desc">Half of every creator fee buys $LOCKEDIN and locks it in a wallet nobody holds a key to. Every buyback adds one more locked holder.</p>
+      <p class="hero-desc" id="hero-desc">Half of every creator fee buys $LOCKEDIN and locks it in a wallet nobody holds a key to. Every buyback adds one more locked holder.</p>
       <div class="hero-actions">
         <a class="button primary" id="buy" hidden target="_blank" rel="noopener noreferrer">Buy on pump.fun <span aria-hidden="true">↗</span></a>
         <a class="button primary" id="watch" href="#locks">Watch the wall</a>
@@ -56,7 +56,7 @@
     </div>
     <dl class="hud" aria-label="Token status">
       <div><dt>Ticker</dt><dd>$LOCKEDIN</dd></div>
-      <div><dt>Creator fees</dt><dd>50% locks · 50% creator</dd></div>
+      <div><dt>Creator fees</dt><dd id="hud-fees">50% locks · 50% creator</dd></div>
       <div><dt>Market</dt><dd id="hud-market">Opens at launch</dd></div>
       <div class="hud-ca"><dt>Contract</dt><dd id="hud-ca">Published at launch</dd></div>
     </dl>
@@ -70,7 +70,7 @@
         <p class="lede">The same four steps repeat for as long as $LOCKEDIN trades. No staking, no claiming, nothing to sign up for.</p>
       </header>
       <ol class="loop">
-        <li><span class="loop-n">1</span><h3>Trading pays creator fees</h3><p>pump.fun charges a creator fee on every trade. The split is fixed at launch and frozen: half to the buyback vault, half to the creator.</p></li>
+        <li><span class="loop-n">1</span><h3>Trading pays creator fees</h3><p id="loop-fees">pump.fun charges a creator fee on every trade. The split is fixed at launch and frozen: half to the buyback vault, half to the creator.</p></li>
         <li><span class="loop-n">2</span><h3>The vault buys</h3><p>Once the vault can cover a buyback plus account rent, the keeper buys $LOCKEDIN on the bonding curve, or on PumpSwap after graduation.</p></li>
         <li><span class="loop-n">3</span><h3>Locked in a keyless wallet</h3><p>The whole purchase moves to a brand-new address with no private key. The program has no instruction that moves locked tokens.</p></li>
         <li><span class="loop-n">4</span><h3>One more locked holder</h3><p>The on-chain counter goes up by one. Supply stays the same: this is a lock, not a burn.</p></li>
@@ -131,6 +131,7 @@
       <dl class="checks">
         <div><dt>50% fee routing</dt><dd id="split-check">Awaiting on-chain verification</dd></div>
         <div><dt>Program permanence</dt><dd id="program-check">Awaiting on-chain verification</dd></div>
+        <div><dt>Creator share</dt><dd id="forward-check">The creator keeps its 50%</dd></div>
         <div><dt>Keeper activity</dt><dd id="keeper-check">No production reading yet</dd></div>
       </dl>
 

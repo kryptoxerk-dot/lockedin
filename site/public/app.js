@@ -86,6 +86,13 @@ async function loadState(){
     const s=state.split;
     const splitVerified=s?.vaultBps===5000&&s.editable===false;
     check('split-check',splitVerified?'50% to the buyback vault · share configuration frozen':s?.exists?`${(s.vaultBps??0)/100}% to vault · ${s.editable===true?'configuration can still change':'configuration not fully verified'}`:'Fee sharing is not configured for this mint',splitVerified);
+    const f=state.forwarding;
+    if(f?.active){
+      $('hero-desc').textContent='Every creator fee buys $LOCKEDIN and locks it in a wallet nobody holds a key to. Every buyback adds one more locked holder.';
+      $('hud-fees').textContent='100% locks';
+      $('loop-fees').textContent=`pump.fun charges a creator fee on every trade. The on-chain split is frozen at half to the buyback vault, half to the creator, and since ${f.since.slice(0,10)} the creator wallet sends its half on to the vault automatically.`;
+    }
+    check('forward-check',f?.active?`Creator's 50% forwarded to the vault · ${(f.forwardedLamports/1e9).toFixed(4)} SOL since ${f.since.slice(0,10)}`:'The creator keeps its 50%',Boolean(f?.active));
     const p=state.permanence;
     check('program-check',p?.immutable===true?`Upgrade authority revoked${p.paused?' · CYCLES PAUSED':p.adminRenounced?' · pause authority renounced':' · pause authority remains'}`:p?.immutable===false?'Program remains upgradeable · permanent lock guarantee not established':'Program upgrade authority could not be verified',p?.immutable===true&&p.adminRenounced===true&&!p.paused);
     $('freshness').textContent=`Chain readings refresh every ${Math.round(state.refreshMs/1000)}s. Balances are read per address; missing readings are marked unavailable.`;
