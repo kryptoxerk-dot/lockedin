@@ -540,11 +540,42 @@ export async function signAndSend(connection, built, payer, { commitment = "conf
   return signature;
 }
 
-/** Confirmation can resolve with an execution error; that is never success. */
+/**
+ * Wait for a transaction by polling its status, never by websocket.
+ *
+ * web3.js confirms through `signatureSubscribe`, and the production RPC (Alchemy) does not offer it:
+ * on mainnet, 2026-10-05, the setup transaction landed and finalized while the script sat retrying a
+ * subscription that answered "method not found". Polling works on every RPC. A landed transaction
+ * that failed is never success; one whose blockhash expired unseen is reported as expired.
+ */
 export async function confirmSuccess(connection, strategy, commitment = "confirmed") {
-  const result = await connection.confirmTransaction(strategy, commitment);
-  if (result.value.err) throw new Error(`Transaction failed: ${JSON.stringify(result.value.err)}`);
-  return result;
+  const signature = typeof strategy === "string" ? strategy : strategy.signature;
+  const lastValid = typeof strategy === "object" ? strategy.lastValidBlockHeight : undefined;
+  const done = (s) => s && (s.confirmationStatus === "finalized" || (commitment !== "finalized" && s.confirmationStatus === "confirmed"));
+  for (;;) {
+    const { value } = await connection.getSignatureStatuses([signature]);
+    const s = value?.[0];
+    if (s?.err) throw new Error(`Transaction failed: ${JSON.stringify(s.err)}`);
+    if (done(s)) return { value: { err: null } };
+    if (lastValid != null && (await connection.getBlockHeight("confirmed")) > lastValid) {
+      const { value: late } = await connection.getSignatureStatuses([signature], { searchTransactionHistory: true });
+      if (late?.[0]?.err) throw new Error(`Transaction failed: ${JSON.stringify(late[0].err)}`);
+      if (late?.[0]) return { value: { err: null } };
+      throw new Error(`Transaction expired before it landed: ${signature}`);
+    }
+    await new Promise((r) => setTimeout(r, 800));
+  }
+}
+
+/** Sign a legacy transaction with fresh blockhash, send it, and confirm it by polling. */
+export async function sendAndConfirm(connection, transaction, signers, commitment = "confirmed") {
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash(commitment);
+  transaction.recentBlockhash = blockhash;
+  transaction.feePayer = transaction.feePayer ?? signers[0].publicKey;
+  transaction.sign(...signers);
+  const signature = await connection.sendRawTransaction(transaction.serialize(), { maxRetries: 5 });
+  await confirmSuccess(connection, { signature, blockhash, lastValidBlockHeight }, commitment);
+  return signature;
 }
 
 /** Bytes a signed cycle would take, measurable even when it is too big to send. */

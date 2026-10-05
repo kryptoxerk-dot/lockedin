@@ -53,6 +53,7 @@ import {
   initConfigInstruction,
   priorityFee,
   programDataPda,
+  sendAndConfirm,
 } from "./lib/cycle.mjs";
 import { MAINNET_GENESIS, programPermanence } from "./lib/permanence.mjs";
 import { rpcLabel } from "./lib/rpc-log.mjs";
@@ -167,12 +168,7 @@ function deployedMatches(state, binary) {
 }
 
 async function send(instructions, label) {
-  const signature = await sendAndConfirmTransaction(
-    connection,
-    new Transaction().add(...priorityFee(), ...instructions),
-    [wallet],
-    { commitment: "confirmed" },
-  );
+  const signature = await sendAndConfirm(connection, new Transaction().add(...priorityFee(), ...instructions), [wallet]);
   say(`${label}: ${signature}`);
   return signature;
 }
@@ -222,7 +218,9 @@ if (flag("--deploy")) {
           "--max-len", String(binary.bytes.length),
           "--with-compute-unit-price", String(PRIORITY_MICROLAMPORTS),
           "--max-sign-attempts", "50",
-          "--use-rpc",
+          // Writes go straight to the block producers by default. Through the RPC (DEPLOY_USE_RPC=1)
+          // a rate-limited provider drops most of the ~300 writes: seen with Alchemy on 2026-10-05.
+          ...(process.env.DEPLOY_USE_RPC === "1" ? ["--use-rpc"] : []),
         ], { stdio: "inherit" });
         if (result.status !== 0) {
           throw new Error("solana program deploy failed. If it left a buffer, reclaim it with `solana program close --buffers`.");

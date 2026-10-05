@@ -20,7 +20,7 @@ import {
   sendAndConfirmTransaction,
 } from "@solana/web3.js";
 import fs from "node:fs";
-import { priorityFee } from "./cycle.mjs";
+import { priorityFee, sendAndConfirm } from "./cycle.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -102,7 +102,7 @@ export async function ensureLookupTable(connection, payer, mint, addresses, log 
       payer: payer.publicKey,
       recentSlot,
     });
-    await sendAndConfirmTransaction(connection, new Transaction().add(...priorityFee(), ix), [payer]);
+    await sendAndConfirm(connection, new Transaction().add(...priorityFee(), ix), [payer]);
     address = created;
     recordLookupTable(mint, address);
     log(`table ${address.toBase58()} created`);
@@ -114,7 +114,7 @@ export async function ensureLookupTable(connection, payer, mint, addresses, log 
   // worth not discovering in production.
   for (let n = 0; n < missing.length; n += 20) {
     const chunk = missing.slice(n, n + 20);
-    await sendAndConfirmTransaction(
+    await sendAndConfirm(
       connection,
       new Transaction().add(
         ...priorityFee(),
