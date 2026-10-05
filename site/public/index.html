@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#040609">
+<title>Locked In — Lean forward. Lock in.</title>
+<meta name="description" content="The lock-in meme, on Solana. Half of every $LOCKEDIN creator fee buys the token and locks it in a wallet nobody holds a key to. Watch the wall grow and verify every lock on-chain.">
+<link rel="canonical" href="https://lockedinforever.locker/">
+<meta property="og:title" content="Locked In — Lean forward. Lock in.">
+<meta property="og:description" content="Half of every creator fee buys $LOCKEDIN and locks it in a keyless wallet. One more locked holder per buyback.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://lockedinforever.locker/">
+<meta property="og:image" content="https://lockedinforever.locker/assets/social-card.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anybody:ital,wdth,wght@0,50..150,400..900;1,50..150,400..900&family=Instrument+Sans:wdth,wght@75..100,400..700&family=Martian+Mono:wdth,wght@75..112.5,400..700&display=swap">
+<link rel="preload" href="/assets/lean-in.webp" as="image">
+<link rel="stylesheet" href="/style.css?v=4">
+<script src="/app.js?v=4" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav">
+  <a class="brand" href="/" aria-label="Locked In home">
+    <img src="/assets/logo.png" alt="" width="40" height="40">
+    <span class="brand-name">Locked In</span>
+  </a>
+  <nav aria-label="Main navigation">
+    <a href="#mechanism">How it works</a>
+    <a href="#locks">The wall</a>
+    <a href="#verify">Verify</a>
+  </nav>
+  <span class="launch-badge" id="launch-badge">Checking status</span>
+</header>
+
+<main id="main">
+  <section class="hero" aria-labelledby="hero-title">
+    <img class="hero-art" src="/assets/lean-in.webp" alt="A gamer leans forward in his chair, controller in hand, under a glowing green padlock." width="1920" height="1080" fetchpriority="high">
+    <div class="hero-copy">
+      <p class="kicker">You know the pose.</p>
+      <h1 id="hero-title"><span class="h1-line">Locked</span><span class="h1-line h1-in">in.</span></h1>
+      <p class="hero-line">Lean forward. Lock in.</p>
+      <p class="hero-desc">Half of every creator fee buys $LOCKEDIN and locks it in a wallet nobody holds a key to. Every buyback adds one more locked holder.</p>
+      <div class="hero-actions">
+        <a class="button primary" id="buy" hidden target="_blank" rel="noopener noreferrer">Buy on pump.fun <span aria-hidden="true">↗</span></a>
+        <a class="button primary" id="watch" href="#locks">Watch the wall</a>
+        <a class="button ghost" href="#mechanism">How it works</a>
+      </div>
+    </div>
+    <dl class="hud" aria-label="Token status">
+      <div><dt>Ticker</dt><dd>$LOCKEDIN</dd></div>
+      <div><dt>Creator fees</dt><dd>50% locks · 50% creator</dd></div>
+      <div><dt>Market</dt><dd id="hud-market">Opens at launch</dd></div>
+      <div class="hud-ca"><dt>Contract</dt><dd id="hud-ca">Published at launch</dd></div>
+    </dl>
+  </section>
+
+  <section id="mechanism" class="band loop-band" aria-labelledby="mechanism-title">
+    <div class="wrap">
+      <header class="band-head">
+        <p class="kicker">How it works</p>
+        <h2 id="mechanism-title">Fees in.<br>Locks out.</h2>
+        <p class="lede">The same four steps repeat for as long as $LOCKEDIN trades. No staking, no claiming, nothing to sign up for.</p>
+      </header>
+      <ol class="loop">
+        <li><span class="loop-n">1</span><h3>Trading pays creator fees</h3><p>pump.fun charges a creator fee on every trade. The split is fixed at launch and frozen: half to the buyback vault, half to the creator.</p></li>
+        <li><span class="loop-n">2</span><h3>The vault buys</h3><p>Once the vault can cover a buyback plus account rent, the keeper buys $LOCKEDIN on the bonding curve, or on PumpSwap after graduation.</p></li>
+        <li><span class="loop-n">3</span><h3>Locked in a keyless wallet</h3><p>The whole purchase moves to a brand-new address with no private key. The program has no instruction that moves locked tokens.</p></li>
+        <li><span class="loop-n">4</span><h3>One more locked holder</h3><p>The on-chain counter goes up by one. Supply stays the same: this is a lock, not a burn.</p></li>
+      </ol>
+      <p class="loop-return"><span aria-hidden="true">↺</span> More trading, more fees, more locks.</p>
+      <p class="disclosure"><strong>Dev buy: 2 SOL at launch.</strong> Those tokens sit in the creator wallet and are not part of the locked total.</p>
+    </div>
+  </section>
+
+  <section id="locks" class="band wall-band" aria-labelledby="locks-title">
+    <div class="wrap">
+      <header class="wall-head">
+        <div>
+          <p class="kicker">The wall</p>
+          <h2 id="locks-title">Every lock is a wallet nobody can open.</h2>
+        </div>
+        <div class="tally">
+          <div class="value tally-value" id="holders">—</div>
+          <div class="label">locked holders</div>
+        </div>
+      </header>
+
+      <div class="wall-frame">
+        <div class="wall" id="wall" aria-hidden="true"></div>
+        <p class="wall-caption" id="wall-caption">The first lock goes up with the first buyback after launch.</p>
+      </div>
+
+      <div class="figures" aria-label="On-chain figures">
+        <div class="figure"><div class="value" id="locked">—</div><div class="label">$LOCKEDIN locked</div></div>
+        <div class="figure"><div class="value" id="percent">—</div><div class="label">of total supply</div></div>
+        <div class="figure"><div class="value" id="pending">—</div><div class="label">SOL waiting in the vault</div></div>
+      </div>
+      <p class="status" id="status" role="status" aria-live="polite">Checking the network…</p>
+
+      <div class="ledger-head">
+        <h3>Every keyless address</h3>
+        <p>Balances are read from Solana. Transaction links come from keeper receipts.</p>
+      </div>
+      <div class="table-scroll" role="region" aria-label="Keyless holder ledger" tabindex="0">
+        <table id="table">
+          <thead><tr><th scope="col">Lock</th><th scope="col">Holder address</th><th scope="col" class="num">Tokens</th><th scope="col">Private key</th><th scope="col">Transaction</th></tr></thead>
+          <tbody id="rows"><tr><td colspan="5" class="empty">Waiting for the first reading.</td></tr></tbody>
+        </table>
+      </div>
+      <div class="pager"><button id="prev" disabled>← Newer</button><span id="range"></span><button id="next" disabled>Older →</button></div>
+      <p class="note">This counts funded keyless addresses created by the mechanism, not people. Other trackers may count holders differently.</p>
+    </div>
+  </section>
+
+  <section id="verify" class="band verify-band" aria-labelledby="verify-title">
+    <div class="wrap">
+      <header class="band-head">
+        <p class="kicker">Verify</p>
+        <h2 id="verify-title">Check the chain,<br>not the site.</h2>
+        <p class="lede">A keyless address has no private key, but the program that owns it can still sign. So a lock is only as permanent as the program: these checks read its upgrade authority and the fee split straight from Solana.</p>
+      </header>
+
+      <dl class="checks">
+        <div><dt>50% fee routing</dt><dd id="split-check">Awaiting on-chain verification</dd></div>
+        <div><dt>Program permanence</dt><dd id="program-check">Awaiting on-chain verification</dd></div>
+        <div><dt>Keeper activity</dt><dd id="keeper-check">No production reading yet</dd></div>
+      </dl>
+
+      <div class="facts">
+        <div><h3>Supply stays the same</h3><p>Locked tokens stay in circulation, held by addresses nobody controls. Nothing is burned.</p></div>
+        <div><h3>No airdrop to holders</h3><p>Buybacks go to fresh keyless addresses. Existing holders don't receive payments.</p></div>
+        <div><h3>Anyone can run a cycle</h3><p>The buyback instruction is permissionless. Our keeper runs it automatically; if it stops, anyone else can.</p></div>
+      </div>
+
+      <details class="derivation">
+        <summary>Derive a holder address yourself <span aria-hidden="true">+</span></summary>
+        <p>Each lock's address comes from the mint and the lock number. Reproduce them independently:</p>
+<pre><code>import { PublicKey } from "@solana/web3.js";
+const program = new PublicKey("<span data-fill="program">Awaiting deployment</span>");
+const mint = new PublicKey("<span data-fill="mint">Awaiting launch</span>");
+function holder(index) {
+  const i = Buffer.alloc(4);
+  i.writeUInt32LE(index);
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("hold"), mint.toBuffer(), i], program
+  )[0];
+}
+// PublicKey.isOnCurve(holder(0).toBytes()) === false</code></pre>
+        <p class="note">Counter: <code data-fill="counter">Awaiting launch</code><br>Buyback vault: <code data-fill="vault">Awaiting launch</code></p>
+      </details>
+
+      <div class="address-box">
+        <span class="address-label">Contract address</span>
+        <code data-fill="mint">Awaiting launch — no production mint configured</code>
+        <button id="copy-mint" disabled aria-label="Copy token mint address">Copy</button>
+      </div>
+      <p id="copy-feedback" class="note" role="status"></p>
+    </div>
+  </section>
+
+  <section class="closing" aria-label="Stay locked in">
+    <div class="wrap closing-inner">
+      <img class="mascot" src="/assets/mascot.webp" alt="The Locked In padlock mascot, leaning forward with a controller." width="720" height="720">
+      <div>
+        <p class="closing-line">Stay<br><span>locked in.</span></p>
+        <a class="back" href="#main">Back to the top ↑</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="wrap footer-inner">
+    <a class="brand" href="/"><img src="/assets/logo.png" alt="" width="32" height="32"><span class="brand-name">Locked In</span></a>
+    <p id="freshness">Production readings will appear here after launch.</p>
+    <p class="note">Solana · $LOCKEDIN · <span id="footer-phase">Checking status</span></p>
+  </div>
+</footer>
+</body>
+</html>

@@ -1,0 +1,24 @@
+[package]
+name = "lockedin"
+version = "0.1.0"
+description = "Locked In -- creator fees buy the token and lock it where nobody can sell it"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "lockedin"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build"]
+
+[dependencies]
+anchor-lang = "0.30.1"
+# Only the legacy token feature. anchor-spl's token_2022 feature does not
+# compile here -- it pulls a version of spl-tlv-account-resolution that fails
+# to build -- so every Token-2022 interaction in this program is raw CPI.
+anchor-spl = { version = "0.30.1", default-features = false, features = ["token"] }

@@ -1,0 +1,16 @@
+{
+  "at": "2026-10-05T03:12:05.605Z",
+  "passed": 10,
+  "checks": [
+    "Dashboard figures match the real on-chain counter",
+    "Dashboard verifies actual immutable deployment and renounced pause admin",
+    "Dashboard verifies the actual frozen 50% fee route",
+    "Dashboard detects actual graduation",
+    "Dashboard lists every actually funded keyless holder",
+    "Dashboard holder balances sum to the real locked total",
+    "Mint and holder accounts have no mint, freeze, permanent-delegate, delegate or close authority that could bypass the lock",
+    "Receipts for another mint cannot replace this token’s transaction or activity",
+    "A test RPC cannot appear as a ready mainnet token",
+    "Holder API also rejects a wrongly configured network"
+  ]
+}

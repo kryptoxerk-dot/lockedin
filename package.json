@@ -1,0 +1,21 @@
+{
+  "name": "@lockedin/root",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "cycle-test": "node scripts/cycle-test.mjs",
+    "adversarial-test": "node scripts/adversarial-test.mjs",
+    "keeper": "node scripts/keeper.mjs",
+    "keeper:once": "node scripts/keeper.mjs --once"
+  },
+  "dependencies": {
+    "@pump-fun/pump-sdk": "^2.0.0",
+    "@pump-fun/pump-swap-sdk": "^1.0.0",
+    "@solana/spl-token": "0.4.13",
+    "@solana/web3.js": "^1.98.0",
+    "bn.js": "5.2.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

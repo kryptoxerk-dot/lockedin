@@ -1,0 +1,15 @@
+.env*
+!.env.example
+.keys/
+*.keypair.json
+id.json
+state/
+data/
+target/
+node_modules/
+.anchor/
+.validator-ledger*
+test-ledger/
+site/qa-output/
+**/*.rs.bk
+__pycache__/

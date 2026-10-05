@@ -1,0 +1,10 @@
+{
+  "_note": "DRAFT for owner approval. Baked into the mint for ever once uploaded. Leave twitter/telegram empty to omit them; never put a placeholder.",
+  "name": "Locked In",
+  "symbol": "LOCKEDIN",
+  "description": "Lean forward. Lock in. Half of every creator fee buys $LOCKEDIN and sends it to a fresh address with no private key, permanently. One more locked holder per cycle, counted on-chain at lockedinforever.locker",
+  "image": "brand/lean-in-v3/exports/lean-lock-logo/logo-1024.png",
+  "website": "https://lockedinforever.locker",
+  "twitter": "",
+  "telegram": ""
+}

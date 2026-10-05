@@ -1,0 +1,19 @@
+2026-10-05 ~03:28 UTC -- ops/rehearse-program-setup.sh on the disposable test validator
+scripts/program-setup.mjs, the exact mainnet deploy path, with a throwaway program id
+2WAqDPfUkZ2HL158apyQjrM5yAHYbSEoZjppmBH27fu6 and a binary built for it from the tested source
+(sha256 a3802035f4e6459ff7467c39139a400ab0f5f5fae5c4d2d1de3c4e77dfd32b3b, 275192 bytes).
+Solana CLI 2.1.21 on the host; the owner's PC has 4.2.2, whose deploy flags were checked to exist.
+
+  PASS  deploy refuses a binary whose hash is not the tested one
+  PASS  deploy lands and the on-chain bytes match the binary
+  PASS  config initialised by the upgrade authority in the same run
+  PASS  finalize refuses while the admin is not renounced
+  PASS  pause admin renounced
+  PASS  upgrade authority removed
+  PASS  status: immutable, admin renounced, unpaused, bytes match
+  PASS  the Solana CLI independently reports Authority: none
+  8 passed, 0 failed
+
+First attempt found one real defect, fixed before this run: init sent in the same slot as the
+deploy can fail because a program is only callable from the next slot. program-setup.mjs now
+waits two slots and retries.

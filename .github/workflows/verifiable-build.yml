@@ -1,0 +1,51 @@
+# Builds the program the way solana-verify and the explorers rebuild it: inside
+# the pinned solanafoundation/solana-verifiable-build image for the Solana
+# release in Cargo.toml's [workspace.metadata.cli]. The hash printed here is
+# the hash the deployed program must have.
+name: Verifiable build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "programs/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/verifiable-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache solana-verify
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/solana-verify
+          key: solana-verify-0.5.2-${{ runner.os }}
+
+      - name: Install solana-verify
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: cargo install solana-verify --version 0.5.2 --locked
+
+      - name: Build in the pinned image
+        run: solana-verify build --library-name lockedin
+
+      - name: Hashes
+        run: |
+          ls -l target/deploy/lockedin.so
+          sha256sum target/deploy/lockedin.so
+          echo "executable hash (what explorers compare):"
+          solana-verify get-executable-hash target/deploy/lockedin.so
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lockedin-${{ github.sha }}
+          path: target/deploy/lockedin.so
+          if-no-files-found: error

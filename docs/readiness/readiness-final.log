@@ -1,0 +1,224 @@
+2.1.21
+== independent bonding-curve suite ==
+========================================================================
+LOCKED IN -- one full cycle
+========================================================================
+        cluster http://127.0.0.1:8899
+        program EMs5GHLJ1MMGrvVxVQKLjpSXpmkeNfc2gXjvAVEhBr2J
+  PASS  a funded stranger cannot create the config — refused with NotUpgradeAuthority
+        config created by the upgrade authority
+        mint 8w7RRpRKNzcxsq5L88jPshsZ5YytWwQxViuZXA8FVmbu
+  PASS  registered: counter starts at zero
+        vault funded with 0.06 SOL
+
+1. a cycle locks the purchase into holder 0
+------------------------------------------------------------------------
+        tx 4V8YuASTCbjWgsaFufH9pvypxerh…
+  PASS  1850818365110 tokens now sit in holder 0
+  PASS  the vault's token account is empty
+  PASS  counter advanced by exactly one
+  PASS  total_locked matches what the holder holds
+
+2. the holder provably has no private key
+------------------------------------------------------------------------
+  PASS  9s8fwXcZnJey52PaixjrEeVv5pVpEofr6kmKdutCJwG6 is off the ed25519 curve
+        no private key exists for it, and none can be derived
+
+3. a caller cannot choose a different holder
+------------------------------------------------------------------------
+        Simulation failed. 
+  PASS  refused (reason above)
+
+4. a second cycle uses a new address, not the old one
+------------------------------------------------------------------------
+  PASS  holder 1 received 1953082834030 tokens
+  PASS  two holders now exist
+  PASS  holder 0 still holds its tokens, untouched
+
+5. nothing in the program can move a locked balance
+------------------------------------------------------------------------
+  PASS  no withdraw, close, rescue or sweep instruction exists
+        SEED_HOLDER appears 3 times: the constant and its two derivations
+
+========================================================================
+  12 passed, 0 failed
+  mint 8w7RRpRKNzcxsq5L88jPshsZ5YytWwQxViuZXA8FVmbu
+========================================================================
+== adversarial suite ==
+========================================================================
+LOCKED IN -- what a caller cannot do
+========================================================================
+        token A EKCnMzDds7jmENnTr1m1sSDMLq5oDUYPTxvdBrFdS1z2
+        token B 6Hmg3sSoNMGdrY2HkSe4VbYMcfYqA1EyvwTGhFTUueaT
+
+1. an empty vault
+------------------------------------------------------------------------
+  PASS  a cycle with nothing collected — refused with CycleTooSmall
+
+2. below the minimum, but not empty
+------------------------------------------------------------------------
+  PASS  a cycle at a quarter of the minimum — refused with CycleTooSmall
+        this is what stops the mechanism spending most of a cycle on account rent
+
+3. choosing where the tokens go
+------------------------------------------------------------------------
+  PASS  a holder index the counter is not on — refused with WrongHolder
+  PASS  somebody else's token account as the destination — refused with WrongHolder
+
+4. spending one token's fees on another
+------------------------------------------------------------------------
+  PASS  a buy naming a different mint — refused with BuyMintMismatch
+  PASS  token B's counter with token A's vault — refused with ConstraintSeeds
+
+5. routing the money somewhere else entirely
+------------------------------------------------------------------------
+  PASS  a buy sent through a program that is not pump.fun — refused with NotPumpProgram
+  PASS  a buy whose buyer is not this vault — refused with BuyerMismatch
+
+5b. buying dust to drain the vault
+------------------------------------------------------------------------
+  PASS  a one-token buy against a funded vault — refused with UnderSpent
+        a cycle must spend at least half its budget on the buy
+
+6. while paused
+------------------------------------------------------------------------
+  PASS  a cycle while paused — refused with Paused
+        pause stops new cycles and reaches nothing already locked
+
+7. the reimbursement cannot be farmed
+------------------------------------------------------------------------
+  PASS  three calls against an unfunded vault, all refused
+  PASS  the caller gained nothing by asking repeatedly
+
+8. a locked balance, once it exists
+------------------------------------------------------------------------
+  PASS  2035394117777 tokens are in the holder's account
+  PASS  its authority is the holder PDA and nothing else
+  PASS  a transfer out cannot even be signed for
+
+9. giving up the pause, for good
+------------------------------------------------------------------------
+  PASS  a stranger renouncing the admin — refused with NotAdmin
+  PASS  renouncing while paused — refused with Paused
+  PASS  the admin is now 11111111111111111111111111111111, which nobody can sign for
+  PASS  the former admin pausing after renouncing — refused with NotAdmin
+        anyone can check this: read the config account's admin field
+
+========================================================================
+  19 passed, 0 failed
+========================================================================
+== independent PumpSwap suite ==
+========================================================================
+LOCKED IN -- a cycle on PumpSwap
+========================================================================
+        mint 8izFifHZJHQMSKRxHo7fJDEUuCdkTD5KQSf3pwMBRhnd
+
+1. the cloned market is really there
+------------------------------------------------------------------------
+  PASS  the bonding curve is complete
+  PASS  pool BNrr3vswYEFr2txYP4tKkha8xkYv4EPrxChXhoGhotxo present, owned by PumpSwap
+        vault funded, running cycle 0
+
+2. the builder picks the PumpSwap path by itself
+------------------------------------------------------------------------
+  PASS  read the curve and chose PumpSwap over the bonding curve
+
+3. it does not fit without a lookup table, and does with one
+------------------------------------------------------------------------
+        a legacy transaction would be 1246 bytes, over the 1232 limit
+        table 2isuNc3bM5TQysh9gg3dLzGyxpmxN7JpSSfnjDCj1Qjo was recorded but is not on this cluster; making a new one
+        table AY2fXHCAisRQnjzwgpVPCGPnTHYM2rQbsjE4194dTzWk created
+        extended with 20
+        extended with 8
+  PASS  lookup table AY2fXHCAisRQnjzwgpVPCGPnTHYM2rQbsjE4194dTzWk holds 28 accounts
+  PASS  the table is warm and loadable the way the keeper loads it
+
+4. the accounts PumpSwap will not create for us
+------------------------------------------------------------------------
+        created 9 account(s) in 5U3v2GpCqJvFFiwY…
+        created 1 account(s) in 32ccoY15TLDaS2yB…
+        created 1 account(s) in 5paUB9NXzziciR5s…
+  PASS  a sendable cycle after 3 round(s) of preparation
+
+5. the cycle
+------------------------------------------------------------------------
+  PASS  the cycle is 476 bytes, 756 under the limit
+  PASS  a one-percent buy on PumpSwap is refused with UnderSpent
+        tx 4XCeVFr4NUQJfbLkYHdqWMrznbfx…
+  PASS  2650575979368 tokens locked into holder 0 on PumpSwap
+  PASS  the vault's token account is empty
+  PASS  the counter advanced by one
+  PASS  the wrapped-SOL account was closed back into the vault
+  PASS  the holder has no private key
+        vault 80890880 -> 11055615 lamports
+
+========================================================================
+  13 passed, 0 failed
+========================================================================
+== revoke test program upgrade authority explicitly ==
+Account Type: Program
+Authority: none
+
+== automatic fee flow through actual graduation ==
+== atomic launch and pre-graduation fee routing ==
+  created, fee shares frozen, dev buy complete: 2qEm1X9Q6o1vrefSMyWjUoQZumdB469kZZzAtbtEqsWGmKtdeKqwnQXmbJfMKVXJhFfcQ8LkEgfeQXL2NicBaaJg
+  verified: frozen 50/50 split already configured
+  the program config already exists
+  PASS  Mint and freeze authorities are revoked
+  PASS  Frozen 50/50 split exists before graduation
+  PASS  New token starts on the bonding curve
+  PASS  Creation, frozen fee shares and 2 SOL dev buy were atomic
+  PASS  Registration starts with no invented holders
+  PASS  Re-running launch preserves the mint and counter
+  PASS  An empty keeper wallet reports insufficient gas explicitly
+  PASS  Launch refuses a different creator wallet on resume
+  PASS  Launch refuses a different network on resume
+  PASS  Real bonding-curve trades produced distributable creator fees
+{"at":"2026-10-05T03:10:04.735Z","kind":"start","rpc":"127.0.0.1:8899","mint":"FGMMaaXYYFnavQziLnLGqtMq5G3BgeUCkEr4SfQ58Lwp","vault":"DZ3nVGYJTokZoHdwoLiaGWY7Qrpw2SuNLLci2DqWHiu7","keeper":"GNzrQXWN4uMgM6bzkKt4d5YWM3LLKgVnThzrpe9WmitN","mode":"executing","intervalMs":60000,"minCycle":20000000}
+{"at":"2026-10-05T03:10:05.424Z","kind":"fees-distributed","mint":"FGMMaaXYYFnavQziLnLGqtMq5G3BgeUCkEr4SfQ58Lwp","lamports":"110189704","graduated":false,"shareholders":2,"signature":"3mzpVxgi7ogRJqtReuVirT8uZ2SoV9z75kmY6DGFaqbkiJf8TbPXSW3kHtCzHwMgmKPkEdTP11C6JsP5myLBkUzM"}
+{"at":"2026-10-05T03:10:05.952Z","kind":"prepared","mint":"FGMMaaXYYFnavQziLnLGqtMq5G3BgeUCkEr4SfQ58Lwp","accounts":2,"signature":"4QpZFWQ2dJytfJ7JSu8QjR3ouRJFnYxhBqu6g4dtoiDBSnyfD99ZF5pGB8497g2jvNRwXJCgyq66cvXsaUVaLjZT"}
+{"at":"2026-10-05T03:10:10.724Z","kind":"locked","mint":"FGMMaaXYYFnavQziLnLGqtMq5G3BgeUCkEr4SfQ58Lwp","index":0,"holder":"4pWQ9PSr1irY8KrYWa9jybifRB68jfdWrgSDwfJA5xk8","signature":"MgWVa8EcxMN2box9uGnQxEmmEPSZVTPpvd24NVTsFS76n2VvqXpZwFvrJSK3Smywn7PjHtZjk6SvLDBxsbNfsiv","tokens":"374124468782","spent":52970772,"margin":99,"market":"bonding-curve","bytes":433}
+  PASS  bonding-curve: keeper distributes creator fees without the creator signing
+  PASS  bonding-curve: vault received exactly half the distributable fees
+  PASS  bonding-curve: keeper bought and recorded a verified lock
+  PASS  bonding-curve: holder count increased by exactly one
+  PASS  bonding-curve: new address is keyless and actually funded
+  PASS  bonding-curve: counter equals the new holder balance
+  PASS  bonding-curve: purchased tokens all left the buyback vault
+== graduate the same token and migrate its liquidity ==
+  PASS  Real buying completed the bonding curve
+  migration 3EresvJ1pAYq1eGpacGghi31dSoPS7HBFcn9DTedY76gPoCXvcYo1V8R5AXPr1uigzwn2XSgQUi844Q7cyshqcBW
+  PASS  Pump created a real canonical PumpSwap pool
+  PASS  Graduation preserved the frozen creator-fee routing
+  PASS  Real PumpSwap trades produced distributable creator fees
+{"at":"2026-10-05T03:11:30.601Z","kind":"start","rpc":"127.0.0.1:8899","mint":"FGMMaaXYYFnavQziLnLGqtMq5G3BgeUCkEr4SfQ58Lwp","vault":"DZ3nVGYJTokZoHdwoLiaGWY7Qrpw2SuNLLci2DqWHiu7","keeper":"GNzrQXWN4uMgM6bzkKt4d5YWM3LLKgVnThzrpe9WmitN","mode":"executing","intervalMs":60000,"minCycle":20000000}
+{"at":"2026-10-05T03:11:31.289Z","kind":"fees-distributed","mint":"FGMMaaXYYFnavQziLnLGqtMq5G3BgeUCkEr4SfQ58Lwp","lamports":"456076560","graduated":true,"shareholders":2,"signature":"4R99aCAjAfdngVgNrwGCTVyVsjSHL1fQtN9sujNRtBMhipHaAv6RpktNysbPQ8duQ3Nnwa2Tnmh8fay5Cm8Pr95U"}
+{"at":"2026-10-05T03:11:31.903Z","kind":"prepared","mint":"FGMMaaXYYFnavQziLnLGqtMq5G3BgeUCkEr4SfQ58Lwp","accounts":2,"signature":"648u4mSxeBi3HBkDChKfnGZFc9cs4RYPDGEhBeCaKn3fdEt8tjXTvYy8cEDgXiDGNL4PpGoB5Ni2k4Nfy5Ln2637"}
+{"at":"2026-10-05T03:11:32.123Z","kind":"locked","mint":"FGMMaaXYYFnavQziLnLGqtMq5G3BgeUCkEr4SfQ58Lwp","index":1,"holder":"2yp9LcrW4P4LYnDxLREytQPg4CMa1Zifoxz7Tqd9vWnB","signature":"5sqLFsj8ATxZehqtNKEWnK6JF5Bd1SZm2NbDhYSh91LbAhqesMfteqEwTJedQ7ZCcmub8Awh9pr98jBdAy2cjK3o","tokens":"248448217446","spent":224405040,"margin":99,"market":"pumpswap","bytes":786}
+  PASS  pumpswap: keeper distributes creator fees without the creator signing
+  PASS  pumpswap: vault received exactly half the distributable fees
+  PASS  pumpswap: keeper bought and recorded a verified lock
+  PASS  pumpswap: holder count increased by exactly one
+  PASS  pumpswap: new address is keyless and actually funded
+  PASS  pumpswap: counter equals the new holder balance
+  PASS  pumpswap: purchased tokens all left the buyback vault
+== unattended keeper follows new trading activity ==
+  PASS  Running keeper reacts to new trading activity without a manual trigger
+  PASS  Unattended execution increases the on-chain holder count
+  PASS  Every unattended cycle created a funded keyless holder
+  PASS  Cycle closes the vault wrapped-SOL account and recovers its rent
+  PASS  Every holder balance sums to the on-chain total
+  33 passed, 0 failed
+== actual dashboard chain data and network guards ==
+  PASS  Dashboard figures match the real on-chain counter
+  PASS  Dashboard verifies actual immutable deployment and renounced pause admin
+  PASS  Dashboard verifies the actual frozen 50% fee route
+  PASS  Dashboard detects actual graduation
+  PASS  Dashboard lists every actually funded keyless holder
+  PASS  Dashboard holder balances sum to the real locked total
+  PASS  Mint and holder accounts have no mint, freeze, permanent-delegate, delegate or close authority that could bypass the lock
+  PASS  Receipts for another mint cannot replace this token’s transaction or activity
+  PASS  A test RPC cannot appear as a ready mainnet token
+  PASS  Holder API also rejects a wrongly configured network
+  10 passed, 0 failed
+EXIT 0

@@ -1,0 +1,22 @@
+[workspace]
+members = ["programs/*"]
+resolver = "2"
+
+# Picks the verifiable-build image (solana-verify): the Solana release every
+# suite ran against. Without it the tool would fall back to Cargo.lock's
+# solana-program, an older toolchain than the one tested.
+[workspace.metadata.cli]
+solana = "2.1.21"
+
+[profile.release]
+# overflow-checks stays ON. A silent wraparound in lamport or token arithmetic
+# is not a trade worth making for a smaller binary.
+overflow-checks = true
+lto = "fat"
+codegen-units = 1
+# Stored on-chain for ever and priced by size. Nothing here is hot and the
+# compute budget is nowhere near its limit, so optimise for bytes.
+opt-level = "z"
+strip = true
+panic = "abort"
+incremental = false
