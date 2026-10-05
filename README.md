@@ -11,7 +11,8 @@ This repository is the complete source of that mechanism: the on-chain program, 
 | | |
 |---|---|
 | Program | [`EMs5GHLJ1MMGrvVxVQKLjpSXpmkeNfc2gXjvAVEhBr2J`](https://explorer.solana.com/address/EMs5GHLJ1MMGrvVxVQKLjpSXpmkeNfc2gXjvAVEhBr2J) |
-| Token mint | Published at launch |
+| Token mint | [`E8M3Xr22f9hmzW3JXdqvJyjPzUfUaBp27GQq3ziLpump`](https://solscan.io/token/E8M3Xr22f9hmzW3JXdqvJyjPzUfUaBp27GQq3ziLpump) |
+| X | [@_lockedinsol_](https://x.com/_lockedinsol_) |
 | Website | https://lockedinforever.locker |
 
 ## How it works
@@ -33,7 +34,7 @@ Review findings, fixes and what can still go wrong: [docs/security.md](docs/secu
 
 ## Verify it yourself
 
-- **Same code as deployed:** the program is built in a pinned Docker image ([verified build](https://solana.com/docs/programs/verified-builds)), so anyone can rebuild it and compare hashes. Explorers show it as verified against this repository. Steps: [docs/verify.md](docs/verify.md).
+- **Same code as deployed:** the program is built in a pinned Docker image ([verified build](https://solana.com/docs/programs/verified-builds)), so anyone can rebuild it and compare hashes. OtterSec verified it on 2026-10-05 against commit `ca4700b` (executable hash `62ce0295…c118`); Solscan and Solana Explorer show the badge. Steps: [docs/verify.md](docs/verify.md).
 - **Permanence:** `solana program show EMs5GHLJ1MMGrvVxVQKLjpSXpmkeNfc2gXjvAVEhBr2J` reports `Authority: none`.
 - **Fee split:** the token's pump.fun fee-sharing config lists two shareholders at 5,000 bps each, and the config can no longer be edited.
 - **Every lock:** holder addresses can be derived from the mint and the lock number, and checked one by one. The website lists them all.

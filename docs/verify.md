@@ -1,6 +1,6 @@
 # Verify Locked In yourself
 
-Each check needs only a Solana RPC endpoint and public tools. Replace `<MINT>` with the token mint published at launch.
+Each check needs only a Solana RPC endpoint and public tools. The token mint is `E8M3Xr22f9hmzW3JXdqvJyjPzUfUaBp27GQq3ziLpump`; use it wherever `<MINT>` appears.
 
 ## 1. The deployed program is this source
 
@@ -9,7 +9,7 @@ The program is built inside the pinned `solanafoundation/solana-verifiable-build
 ```bash
 cargo install solana-verify --version 0.5.2 --locked
 solana-verify verify-from-repo -um --program-id EMs5GHLJ1MMGrvVxVQKLjpSXpmkeNfc2gXjvAVEhBr2J \
-  https://github.com/kryptoxerk-dot/lockedin --commit-hash <COMMIT> --library-name lockedin
+  https://github.com/kryptoxerk-dot/lockedin --commit-hash ca4700bb2f145433df86429827981b76325746df --library-name lockedin
 ```
 
 This rebuilds the program and compares its hash with the one on mainnet. The same verification was submitted to OtterSec's registry before the program was made immutable, so Solscan and Solana Explorer show the program as verified. The GitHub Actions workflow in `.github/workflows/verifiable-build.yml` runs the same build in public on every change.

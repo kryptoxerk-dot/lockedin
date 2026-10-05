@@ -42,6 +42,10 @@ function status(){
   if(!state)return;
   const elapsed=Date.now()-received,age=(state.ageMs??0)+elapsed;
   if(offline){$('status').className='status broken';$('status').textContent=`Cannot reach the server. ${state.ready?`Last chain reading ${ago(age)}.`:'Production data is unavailable.'}`;$('launch-badge').textContent='DATA OFFLINE';$('launch-badge').dataset.state='bad';return;}
+  if(!state.ready&&state.phase==='unregistered'){
+    $('status').className='status pending';$('status').textContent='Launched. The buyback keeper is starting: live lock readings appear here within minutes.';
+    $('launch-badge').textContent='LIVE · STARTING';$('launch-badge').dataset.state='pre';$('footer-phase').textContent='Launched';return;
+  }
   if(!state.ready){
     const prelaunch=state.phase==='prelaunch';$('status').className=prelaunch?'status pending':'status broken';
     $('status').textContent=prelaunch?'Pre-launch. No production mint is configured. Live readings will appear after launch.':state.error??'Production data is not ready.';
@@ -65,14 +69,14 @@ async function loadState(){
     if(state.program)fill('program',state.program);
     mintAddress=key(state.mint)?state.mint:null;$('copy-mint').disabled=!mintAddress;
     fill('mint',mintAddress??'Awaiting launch — no production mint configured');
-    $('buy').hidden=!(state.ready&&mintAddress&&state.cluster==='mainnet-beta');
+    $('buy').hidden=!((state.ready||state.phase==='unregistered')&&mintAddress&&state.cluster==='mainnet-beta');
     $('hud-ca').textContent=mintAddress??'Published at launch';
     $('hud-market').textContent=!state.ready?(state.phase==='prelaunch'?'Opens at launch':'Unavailable'):state.market==='pumpswap'?'PumpSwap':state.market==='bonding-curve'?'Bonding curve':'Unknown';
     if(!$('buy').hidden)$('buy').href=`https://pump.fun/coin/${mintAddress}`;
     if(!state.ready){
       ['holders','locked','percent','pending'].forEach(id=>value(id,'—'));
-      renderWall(null,state.phase==='prelaunch');
-      empty(state.phase==='prelaunch'?'No production cycles yet. The ledger opens after launch.':'Chain data is unavailable. Please check again shortly.');lastCount=null;
+      renderWall(null,state.phase==='prelaunch'||state.phase==='unregistered');
+      empty(state.phase==='prelaunch'?'No production cycles yet. The ledger opens after launch.':state.phase==='unregistered'?'Launched. The first lock appears here once the keeper runs its first buyback.':'Chain data is unavailable. Please check again shortly.');lastCount=null;
       check('split-check','Awaiting on-chain verification',false);check('program-check','Awaiting on-chain verification',false);check('keeper-check','No production reading yet',false);
       $('freshness').textContent='No production readings are displayed until the mint is configured and registered.';
       status();return;
