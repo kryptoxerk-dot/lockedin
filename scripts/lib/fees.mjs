@@ -25,7 +25,7 @@
  * The other half of the split goes to the deployer in the same transaction, by
  * the same instruction. Nobody has to be trusted to forward anything.
  */
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, SystemProgram, TransactionInstruction } from "@solana/web3.js";
 import { createRequire } from "node:module";
 
 const requireCjs = createRequire(import.meta.url);
@@ -141,5 +141,46 @@ export async function distributeInstructions(connection, mint, payer) {
   if (!instructions.length) {
     return { instructions: null, reason: "pump produced no instructions", state };
   }
+  // On the bonding curve pump now refuses to distribute (CreatorFeesNotSwept,
+  // 6095) while fees still sit in the curve's WSOL account. Its own claim
+  // button sweeps first; the SDK does not, so this does. Anyone may sign it,
+  // and it succeeds with nothing to sweep, so it goes in every time.
+  if (!built.isGraduated) instructions.unshift(sweepInstruction(mint, payer));
   return { instructions, reason: null, state };
+}
+
+const TOKEN_PROGRAM = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const ATA_PROGRAM = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+const wsolAccount = (owner) =>
+  PublicKey.findProgramAddressSync([owner.toBuffer(), TOKEN_PROGRAM.toBuffer(), WSOL.toBuffer()], ATA_PROGRAM)[0];
+
+/**
+ * pump's SweepCreatorFee, laid out as pump.fun's own claim sends it: moves
+ * the creator fees held in the curve's WSOL account into the creator vault,
+ * where DistributeCreatorFees can split them. With the 50/50 split in place
+ * the curve's creator is the sharing config, so that is whose vault it is.
+ */
+export function sweepInstruction(mint, payer) {
+  const curve = pump.bondingCurvePda(mint);
+  const creatorVault = pump.creatorVaultPda(sharingConfigPda(mint));
+  const keys = [
+    [payer, true, true],
+    [pump.GLOBAL_PDA, false, false],
+    [mint, false, false],
+    [WSOL, false, false],
+    [TOKEN_PROGRAM, false, false],
+    [ATA_PROGRAM, false, false],
+    [SystemProgram.programId, false, false],
+    [curve, false, true],
+    [wsolAccount(curve), false, true],
+    [creatorVault, false, true],
+    [wsolAccount(creatorVault), false, true],
+    [pump.PUMP_EVENT_AUTHORITY_PDA, false, false],
+    [pump.PUMP_PROGRAM_ID, false, false],
+  ].map(([pubkey, isSigner, isWritable]) => ({ pubkey, isSigner, isWritable }));
+  return new TransactionInstruction({
+    programId: pump.PUMP_PROGRAM_ID,
+    keys,
+    data: Buffer.from([32, 246, 191, 52, 8, 201, 73, 186]),
+  });
 }
